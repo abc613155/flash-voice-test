@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>本機數字語音測試</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f6f8;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#111}
+main{max-width:720px;margin:auto;padding:16px}
+.card{background:#fff;border:1px solid #d9dde5;border-radius:14px;padding:16px;margin-bottom:12px}
+h1{font-size:23px;margin:0 0 6px}.sub{color:#6b7280;font-size:14px;line-height:1.5}
+button{min-height:48px;border:1px solid #cfd5df;border-radius:11px;background:#fff;padding:9px 14px;font-size:16px;font-weight:800}
+button.primary{background:#2563eb;color:#fff;border-color:#2563eb}
+button:disabled{opacity:.45}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.prompt{text-align:center;font-size:64px;font-weight:900;margin:12px 0}
+.state{text-align:center;font-size:20px;font-weight:900;min-height:31px}
+.heard{text-align:center;font-size:34px;font-weight:900;min-height:50px}
+.ok{color:#15803d}.bad{color:#b91c1c}.listen{color:#2563eb}
+.meter{height:18px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:10px 0}
+.meter>div{height:100%;width:0%;background:#111;border-radius:999px;transition:width .06s linear}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.test{padding:9px;border-radius:9px;border:1px solid #d9dde5;text-align:center;font-weight:800}
+.test.pass{background:#dcfce7;border-color:#86efac}.test.fail{background:#fee2e2;border-color:#fca5a5}
+.small{font-size:13px;color:#6b7280;line-height:1.5}
+.log{font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;background:#f8fafc;border-radius:9px;padding:10px;min-height:70px;max-height:180px;overflow:auto}
+@media(max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.prompt{font-size:54px}}
+</style>
+</head>
+<body>
+<main>
+<section class="card">
+  <h1>本機數字語音測試 <span style="font-size:12px;color:#6b7280">v2.0</span></h1>
+  <div class="sub">不使用 Web Speech、不使用 API。每一題只讓模型尋找「目前正確答案」整句，例如目標 12 時只找「十二」，不再同時找「十」。</div>
+  <div class="row" style="margin-top:12px">
+    <button class="primary" id="start" disabled>載入本機模型中…</button>
+    <button id="stop" disabled>停止</button>
+    <button id="reset">重測</button>
+  </div>
+</section>
+
+<section class="card">
+  <div class="small">麥克風收音強度</div>
+  <div class="meter"><div id="meter"></div></div>
+  <div class="state" id="state">載入本機模型中…</div>
+</section>
+
+<section class="card">
+  <div class="small" style="text-align:center">請直接說</div>
+  <div class="prompt" id="prompt">十二</div>
+  <div class="small" style="text-align:center">模型判斷</div>
+  <div class="heard" id="heard">—</div>
+</section>
+
+<section class="card">
+  <div class="small">固定測試：12、18、25、37、46、58、72、105。</div>
+  <div class="grid" id="tests"></div>
+</section>
+
+<section class="card">
+  <div class="small">狀態紀錄</div>
+  <div class="log" id="log"></div>
+</section>
+</main>
+
+<script type="module">
+import { initKWSModule, createKeywordSpotter } from "https://cdn.jsdelivr.net/npm/@sherpaw/kws@0.2.1/dist/core.js";
+
+const MODEL="https://huggingface.co/moeru-ai/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/resolve/main/install/bin/wasm/";
+const cases=[12,18,25,37,46,58,72,105];
+let idx=0,passes=0,attempts=0;
+let mod=null,spotter=null,stream=null,audioCtx=null,source=null,processor=null;
+let running=false,processing=false,speechSeen=false,silenceMs=0,caseArmed=false;
+
+const $=s=>document.querySelector(s);
+const py={
+  '零':['l','íng'],'一':['y','ī'],'二':['èr'],'兩':['l','iǎng'],
+  '三':['s','ān'],'四':['s','ì'],'五':['w','ǔ'],'六':['l','iù'],
+  '七':['q','ī'],'八':['b','ā'],'九':['j','iǔ'],
+  '十':['sh','í'],'百':['b','ǎi'],'千':['q','iān']
+};
+
+function log(msg){
+  $('#log').textContent+=`[${new Date().toLocaleTimeString()}] ${msg}\n`;
+  $('#log').scrollTop=$('#log').scrollHeight;
+}
+function state(t,c=''){ $('#state').className='state '+c; $('#state').textContent=t; }
+function current(){return cases[idx]}
+function render(){
+  $('#tests').innerHTML=cases.map((n,i)=>`<div class="test" id="t${i}">${n}</div>`).join('');
+}
+function toZh(n,liang=false){
+  const d=['零','一','二','三','四','五','六','七','八','九'];
+  if(n<10)return d[n];
+  if(n<20)return '十'+(n%10?d[n%10]:'');
+  if(n<100)return d[Math.floor(n/10)]+'十'+(n%10?d[n%10]:'');
+  if(n<1000){
+    let h=Math.floor(n/100),r=n%100;
+    let s=(liang&&h===2?'兩':d[h])+'百';
+    if(!r)return s;
+    if(r<10)return s+'零'+d[r];
+    if(r<20)return s+'一十'+(r%10?d[r%10]:'');
+    return s+d[Math.floor(r/10)]+'十'+(r%10?d[r%10]:'');
+  }
+  let th=Math.floor(n/1000),r=n%1000;
+  let s=(liang&&th===2?'兩':d[th])+'千';
+  if(!r)return s;
+  if(r<100)s+='零';
+  return s+toZh(r,liang);
+}
+function tokens(text){ return [...text].flatMap(ch=>py[ch]||[]); }
+function matchesFor(n){
+  const forms=[toZh(n,false)];
+  if(n>=200)forms.push(toZh(n,true));
+  if(n>=110&&n<120)forms.push('一百十'+(n%10?toZh(n%10):''));
+  return [...new Set(forms)].map(x=>({tokens:tokens(x),threshold:.13,score:3.0}));
+}
+async function armCase(){
+  const n=current();
+  $('#prompt').textContent=toZh(n);
+  $('#heard').textContent='—';$('#heard').className='heard';
+  state('🎧 請說「'+toZh(n)+'」','listen');
+  speechSeen=false;silenceMs=0;caseArmed=false;
+  await spotter.setKeywords([{label:String(n),matches:matchesFor(n),threshold:.13,score:3.0}],{maxActivePaths:8});
+  await spotter.reset();
+  caseArmed=true;
+  log('目標 '+n+'：只啟用完整關鍵詞「'+toZh(n)+'」');
+}
+function finish(ok){
+  if(!running||!caseArmed)return;
+  caseArmed=false;attempts++;
+  const n=current();
+  const box=$('#t'+idx);
+  box.classList.remove('pass','fail');
+  box.classList.add(ok?'pass':'fail');
+  if(ok){
+    passes++;
+    $('#heard').textContent='✓ '+n;
+    $('#heard').className='heard ok';
+    state('✓ 正確','ok');
+    log('PASS：'+n);
+  }else{
+    $('#heard').textContent='未命中';
+    $('#heard').className='heard bad';
+    state('✗ 沒辨識到「'+toZh(n)+'」','bad');
+    log('FAIL：'+n+'（有收到聲音，但完整關鍵詞沒有命中）');
+  }
+  if(idx>=cases.length-1){
+    running=false;
+    $('#start').disabled=false;$('#stop').disabled=true;
+    state(`完成：${passes}/${attempts} 正確`,passes>=7?'ok':'bad');
+    return;
+  }
+  idx++;
+  setTimeout(()=>armCase(),900);
+}
+function rms(a){
+  let s=0;for(const x of a)s+=x*x;return Math.sqrt(s/a.length);
+}
+function mountPack(m,data,meta){
+  const bytes=new Uint8Array(data);
+  for(const f of meta.files){
+    const name=f.filename.startsWith('/')?f.filename.slice(1):f.filename;
+    m.FS_createDataFile('/',name,bytes.subarray(f.start,f.end),true,true,true);
+  }
+}
+async function loadModel(){
+  try{
+    const [d,m]=await Promise.all([
+      fetch(MODEL+'preload.data',{cache:'force-cache'}),
+      fetch(MODEL+'preload.js.metadata',{cache:'force-cache'})
+    ]);
+    if(!d.ok||!m.ok)throw new Error('模型下載失敗');
+    const [data,meta]=await Promise.all([d.arrayBuffer(),m.json()]);
+    mod=await initKWSModule();
+    mountPack(mod,data,meta);
+    spotter=createKeywordSpotter(mod,{
+      model:{encoder:'encoder.onnx',decoder:'decoder.onnx',joiner:'joiner.onnx',tokens:'tokens.txt'},
+      keywords:[{label:'12',matches:matchesFor(12),threshold:.13,score:3.0}],
+      maxActivePaths:8
+    });
+    $('#start').disabled=false;$('#start').textContent='開始測試';
+    state('本機模型已就緒','ok');
+  }catch(e){
+    console.error(e);state('模型載入失敗','bad');log(String(e.message||e));
+  }
+}
+async function setupMic(){
+  if(stream)return;
+  stream=await navigator.mediaDevices.getUserMedia({
+    audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false
+  });
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended')await audioCtx.resume();
+  source=audioCtx.createMediaStreamSource(stream);
+  processor=audioCtx.createScriptProcessor(2048,1,1);
+  source.connect(processor);processor.connect(audioCtx.destination);
+  processor.onaudioprocess=e=>{
+    const chunk=new Float32Array(e.inputBuffer.getChannelData(0));
+    const level=rms(chunk);
+    $('#meter').style.width=Math.min(100,level*450)+'%';
+    if(!running||!caseArmed||processing)return;
+    const ms=chunk.length/audioCtx.sampleRate*1000;
+    if(level>.012){speechSeen=true;silenceMs=0}
+    else if(speechSeen)silenceMs+=ms;
+
+    processing=true;
+    spotter.processAudio(chunk,audioCtx.sampleRate).then(hits=>{
+      if(hits.length && running && caseArmed){
+        finish(true);
+      }
+    }).catch(e=>log('模型錯誤：'+String(e.message||e))).finally(()=>processing=false);
+
+    // If real speech was present but the complete target phrase did not hit, mark fail after silence.
+    if(running&&caseArmed&&speechSeen&&silenceMs>1200){
+      finish(false);
+    }
+  };
+}
+async function start(){
+  try{
+    await setupMic();
+    idx=0;passes=0;attempts=0;render();running=true;
+    $('#start').disabled=true;$('#stop').disabled=false;
+    await armCase();
+  }catch(e){
+    state('請允許麥克風','bad');log(String(e.message||e));
+  }
+}
+function stop(){
+  running=false;caseArmed=false;
+  $('#start').disabled=false;$('#stop').disabled=true;
+  state('已停止');
+}
+function reset(){
+  stop();idx=0;passes=0;attempts=0;render();
+  $('#prompt').textContent=toZh(cases[0]);$('#heard').textContent='—';$('#log').textContent='';
+}
+$('#start').onclick=start;$('#stop').onclick=stop;$('#reset').onclick=reset;
+render();$('#prompt').textContent=toZh(cases[0]);loadModel();
+</script>
+</body>
+</html>
