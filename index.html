@@ -1,152 +1,352 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>一年級 901｜閃算訓練</title>
-<style>*{box-sizing:border-box}body{margin:0;background:#f5f6f8;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#171717}.app{max-width:760px;margin:auto;padding:16px}.card{background:#fff;border:1px solid #d8dce3;border-radius:13px;padding:15px;margin-top:12px}.top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.title{font-size:23px;font-weight:900}.sub,.hint{color:#6b7280;font-size:14px}.stats{display:flex;gap:8px}.pill{background:#fff;border:1px solid #d8dce3;border-radius:12px;padding:8px 11px}.settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{font-weight:700;font-size:14px;display:block;margin-bottom:5px}select,input{width:100%;min-height:46px;border:1px solid #d8dce3;border-radius:10px;padding:8px;font-size:17px}.stage{text-align:center;min-height:280px;display:flex;flex-direction:column;justify-content:center;align-items:center}.status{align-self:stretch;display:flex;justify-content:space-between;color:#6b7280}.flash{font-size:clamp(80px,20vw,150px);font-weight:900;min-height:160px;display:flex;align-items:center}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}button{min-height:46px;border:1px solid #d8dce3;border-radius:10px;background:#fff;padding:8px 13px;font-weight:800;font-size:15px}button.primary{background:#2563eb;color:white;border-color:#2563eb}button:disabled{opacity:.45}.answer{display:none}.answer.show{display:block}.answerrow{display:flex;gap:8px;align-items:center}.answerrow input{flex:1}.mic{white-space:nowrap;padding:12px;border:1px solid #d8dce3;border-radius:10px;font-weight:800;cursor:pointer}.listening{animation:p .7s infinite alternate}@keyframes p{to{transform:scale(1.06)}}.feedback{font-weight:800;margin-top:9px;min-height:24px}.ok{color:#15803d}.bad{color:#b91c1c}.result{display:none;text-align:center}.result.show{display:block}.score{font-size:42px;font-weight:900}body.practice .settings{display:none}@media(max-width:600px){.settings{grid-template-columns:1fr}.top{display:block}.stats{margin-top:8px}.pill{flex:1;text-align:center}.actions{display:grid;grid-template-columns:1fr 1fr 1fr}.answerrow{display:grid;grid-template-columns:1fr auto}.stage{min-height:220px}}</style></head>
-<body><main class="app"><header class="top"><div><div class="sub">一年級組 901｜閃算訓練</div><div class="title" id="modeTitle"></div><div class="actions"><button type="button" class="primary" id="start" onclick="window.startFlash901&&window.startFlash901()">▶ 開始</button><span id="buildTag" style="font-size:11px;color:#6b7280">v12.7</span><button type="button" id="repeat" disabled>↻ 重播本題</button><button type="button" id="reset">重新設定</button></div></div><div class="stats"><div class="pill">第 <b id="qno">1</b>/<b id="qtotal">15</b> 題</div><div class="pill">正確 <b id="correct">0</b></div></div></header>
-<section class="card settings"><div><label>訓練級別</label><select id="level"><option value="10a">十級｜一位數 4口</option><option value="10b">十級｜一位／二位數 3口</option><option value="9a">九級｜一位數 5口</option><option value="9b">九級｜一位／二位數 4口</option></select></div><div><label>每口顯示時間：<b id="speedText">0.8 秒</b></label><input id="speed" type="range" min=".1" max="1" step=".1" value=".8"></div><div><label>題數</label><select id="questions"><option value="15">15題｜正式訓練</option><option value="30">30題｜同分加賽</option><option value="10">10題｜快速練習</option></select></div><div><label>數字間隔</label><select id="gap"><option value="0">連續閃現</option><option value="100">0.1秒</option><option value="200">0.2秒</option></select></div></section>
-<section class="card stage"><div class="status"><span id="status">準備開始</span><span>第 <b id="mouth">0</b>/<b id="mouthTotal">4</b> 口</span></div><div class="flash" id="flashNumber">READY</div><div class="hint">閃完後輸入答案，或點 🎤 直接說答案</div></section>
-<section class="card answer" id="answerPanel"><label>答案</label><div class="answerrow"><input id="answer" inputmode="text" enterkeyhint="done" autocomplete="off" placeholder="直接輸入，或按右邊 🎤 說答案"><button type="button" class="mic" id="mic">🎤</button><button type="button" class="primary" id="submit">確定</button></div><div class="feedback" id="feedback"></div></section>
-<section class="card result" id="resultPanel"><div>本次成績</div><div class="score"><span id="finalScore">0</span> / <span id="finalTotal">15</span></div><div id="accuracy"></div></section></main>
-<script>
-(()=>{const $=s=>document.querySelector(s);let terms=[],target=0,q=1,correct=0,busy=false,timers=[];
-function cfg(){let v=$('#level').value,m={'10a':['十級心算｜一位數 4 口',4,0],'10b':['十級心算｜一位／二位數 3 口',3,1],'9a':['九級心算｜一位數 5 口',5,0],'9b':['九級心算｜一位／二位數 4 口',4,1]}[v];return{name:m[0],mouths:m[1],mixed:m[2],total:+$('#questions').value,speed:+$('#speed').value*1000,gap:+$('#gap').value}}
-function later(f,t){timers.push(setTimeout(f,t))}function clear(){timers.forEach(clearTimeout);timers=[];busy=false}
-function gen(){let c=cfg(),a=[],s=0;for(let i=0;i<c.mouths;i++){let max=c.mixed?99:9,min=c.mixed&&Math.random()<.65?10:1,n=min+Math.floor(Math.random()*(max-min+1));if(i&&Math.random()<.32&&s-n>=0)n=-n;s+=n;a.push(n)}terms=a;target=s;$('#mouthTotal').textContent=c.mouths}
-function head(){let c=cfg();$('#modeTitle').textContent=c.name;$('#qno').textContent=q;$('#qtotal').textContent=c.total;$('#correct').textContent=correct}
-function num(raw){let x=(raw||'').trim().replace(/[，。,.！!？?、\s]/g,'').replace(/^(答案是|答案為|答案|等於|是)/,'');if(/^-?\d+$/.test(x))return +x;let neg=/^(負|负)/.test(x);x=x.replace(/^(負|负)/,'').replace(/拾/g,'十').replace(/佰/g,'百');let d={'零':0,'〇':0,'○':0,'一':1,'壹':1,'二':2,'兩':2,'两':2,'貳':2,'贰':2,'三':3,'參':3,'叁':3,'四':4,'肆':4,'五':5,'伍':5,'六':6,'陸':6,'陆':6,'七':7,'柒':7,'八':8,'捌':8,'九':9,'玖':9},n=0,seen=0;if(x.includes('百')){let [a,r]=x.split('百');if(a&&d[a]===undefined)return NaN;n+=(a?d[a]:1)*100;x=r||'';seen=1}if(x.includes('十')){let [a,b]=x.split('十');if(a&&d[a]===undefined)return NaN;n+=(a?d[a]:1)*10;if(b){if(d[b]===undefined)return NaN;n+=d[b]}seen=1}else if(x){if(x.length===1&&d[x]!==undefined){n+=d[x];seen=1}else{let z=[...x].map(c=>d[c]);if(z.some(v=>v===undefined))return NaN;n=+z.join('');seen=1}}return seen?(neg?-n:n):NaN}
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>一年級 901｜閃算訓練</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f6f8;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#171717}
+.app{max-width:760px;margin:auto;padding:16px}
+.card{background:#fff;border:1px solid #d8dce3;border-radius:13px;padding:15px;margin-top:12px}
+.top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.title{font-size:23px;font-weight:900}
+.sub,.hint{color:#6b7280;font-size:14px}
+.stats{display:flex;gap:8px}
+.pill{background:#fff;border:1px solid #d8dce3;border-radius:12px;padding:8px 11px}
+.settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label{font-weight:700;font-size:14px;display:block;margin-bottom:5px}
+select,input{width:100%;min-height:46px;border:1px solid #d8dce3;border-radius:10px;padding:8px;font-size:17px}
+.stage{text-align:center;min-height:280px;display:flex;flex-direction:column;justify-content:center;align-items:center}
+.status{align-self:stretch;display:flex;justify-content:space-between;color:#6b7280}
+.flash{font-size:clamp(80px,20vw,150px);font-weight:900;min-height:160px;display:flex;align-items:center}
+.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+button{min-height:46px;border:1px solid #d8dce3;border-radius:10px;background:#fff;padding:8px 13px;font-weight:800;font-size:15px}
+button.primary{background:#2563eb;color:white;border-color:#2563eb}
+button:disabled{opacity:.45}
+.voice{margin-top:8px;font-size:18px;font-weight:900;min-height:28px}
+.voice.ready{color:#15803d}.voice.listen{color:#2563eb}.voice.bad{color:#b91c1c}
+.result{display:none;text-align:center}.result.show{display:block}.score{font-size:42px;font-weight:900}
+body.practice .settings{display:none}
+@media(max-width:600px){
+ .settings{grid-template-columns:1fr}.top{display:block}.stats{margin-top:8px}
+ .pill{flex:1;text-align:center}.actions{display:grid;grid-template-columns:1fr 1fr 1fr}.stage{min-height:220px}
+}
+</style>
+</head>
+<body>
+<main class="app">
+<header class="top">
+  <div>
+    <div class="sub">一年級組 901｜閃算訓練</div>
+    <div class="title" id="modeTitle"></div>
+    <div class="actions">
+      <button type="button" class="primary" id="start" disabled>準備語音中…</button>
+      <span id="buildTag" style="font-size:11px;color:#6b7280">v13.0</span>
+      <button type="button" id="repeat" disabled>↻ 重播本題</button>
+      <button type="button" id="reset">重新設定</button>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="pill">第 <b id="qno">1</b>/<b id="qtotal">15</b> 題</div>
+    <div class="pill">正確 <b id="correct">0</b></div>
+  </div>
+</header>
 
+<section class="card settings">
+  <div><label>訓練級別</label>
+    <select id="level">
+      <option value="10a">十級｜一位數 4口</option>
+      <option value="10b">十級｜一位／二位數 3口</option>
+      <option value="9a">九級｜一位數 5口</option>
+      <option value="9b">九級｜一位／二位數 4口</option>
+    </select>
+  </div>
+  <div><label>每口顯示時間：<b id="speedText">0.8 秒</b></label>
+    <input id="speed" type="range" min=".1" max="1" step=".1" value=".8">
+  </div>
+  <div><label>題數</label>
+    <select id="questions">
+      <option value="15">15題｜正式訓練</option>
+      <option value="30">30題｜同分加賽</option>
+      <option value="10">10題｜快速練習</option>
+    </select>
+  </div>
+  <div><label>數字間隔</label>
+    <select id="gap">
+      <option value="0">連續閃現</option>
+      <option value="100">0.1秒</option>
+      <option value="200">0.2秒</option>
+    </select>
+  </div>
+</section>
+
+<section class="card stage">
+  <div class="status"><span id="status">準備開始</span><span>第 <b id="mouth">0</b>/<b id="mouthTotal">4</b> 口</span></div>
+  <div class="flash" id="flashNumber">READY</div>
+  <div class="voice" id="voiceState">語音引擎載入中…</div>
+  <div class="hint">閃完後直接說答案，不用按任何按鈕</div>
+</section>
+
+<section class="card result" id="resultPanel">
+  <div>本次成績</div>
+  <div class="score"><span id="finalScore">0</span> / <span id="finalTotal">15</span></div>
+  <div id="accuracy"></div>
+</section>
+</main>
+
+<script>
+(()=>{
+const $=s=>document.querySelector(s);
+let terms=[],target=0,q=1,correct=0,busy=false,timers=[],voiceReady=false,started=false;
+
+function cfg(){
+  const v=$('#level').value;
+  const m={
+    '10a':['十級心算｜一位數 4 口',4,0],
+    '10b':['十級心算｜一位／二位數 3 口',3,1],
+    '9a':['九級心算｜一位數 5 口',5,0],
+    '9b':['九級心算｜一位／二位數 4 口',4,1]
+  }[v];
+  return {name:m[0],mouths:m[1],mixed:m[2],total:+$('#questions').value,speed:+$('#speed').value*1000,gap:+$('#gap').value};
+}
+function later(f,t){timers.push(setTimeout(f,t))}
+function clearTimers(){timers.forEach(clearTimeout);timers=[];busy=false}
+function gen(){
+  const c=cfg(); let a=[],sum=0;
+  for(let i=0;i<c.mouths;i++){
+    let max=c.mixed?99:9;
+    let min=c.mixed&&Math.random()<.65?10:1;
+    let n=min+Math.floor(Math.random()*(max-min+1));
+    if(i&&Math.random()<.32&&sum-n>=0)n=-n;
+    sum+=n;a.push(n);
+  }
+  terms=a;target=sum;$('#mouthTotal').textContent=c.mouths;
+}
+function head(){
+  const c=cfg();
+  $('#modeTitle').textContent=c.name;
+  $('#qno').textContent=q;$('#qtotal').textContent=c.total;$('#correct').textContent=correct;
+}
+function voiceState(text,cls=''){
+  const e=$('#voiceState'); e.className='voice '+cls; e.textContent=text;
+}
 function showAnswer(){
   busy=false;
   $('#flashNumber').textContent='?';
-  $('#status').textContent='請作答';
-  $('#answerPanel').style.display='block';
-  $('#answer').value='';
-  $('#answer').focus();
+  $('#status').textContent='請回答';
   $('#repeat').disabled=false;
+  voiceState('🎧 請直接說答案','listen');
+  window.beginVoiceAnswer?.();
 }
 function flash(){
-  clear();
+  clearTimers();
   busy=true;
-  $('#answerPanel').style.display='none';
+  window.cancelVoiceAnswer?.();
   $('#repeat').disabled=true;
-  let c=cfg(), i=0;
+  const c=cfg();let i=0;
   $('#status').textContent='開始';
   $('#mouth').textContent='0';
+  voiceState('');
   const step=()=>{
-    if(i>=terms.length){ later(showAnswer,Math.max(120,c.gap)); return; }
+    if(i>=terms.length){later(showAnswer,Math.max(120,c.gap));return}
     $('#flashNumber').textContent=(terms[i]>0&&i>0?'+':'')+terms[i];
     $('#mouth').textContent=i+1;
     i++;
-    later(()=>{
-      $('#flashNumber').textContent='';
-      later(step,c.gap);
-    },c.speed);
+    later(()=>{$('#flashNumber').textContent='';later(step,c.gap)},c.speed);
   };
   step();
 }
-function submit(){
-  if(busy)return;
-  let v=num($('#answer').value);
-  if(Number.isNaN(v)){ $('#feedback').className='feedback bad';$('#feedback').textContent='請輸入答案';return; }
-  let c=cfg(), ok=v===target;
+function judge(v,heard=''){
+  if(busy || !started)return;
+  window.cancelVoiceAnswer?.();
+  const c=cfg(),ok=v===target;
   if(ok)correct++;
   $('#correct').textContent=correct;
-  $('#feedback').className='feedback '+(ok?'ok':'bad');
-  $('#feedback').textContent=ok?'答對了':'答案是 '+target;
-  if(q>=c.total){ $('#status').textContent='完成';$('#flashNumber').textContent=correct+' / '+c.total;return; }
-  q++; head(); gen();
-  later(()=>{ $('#feedback').textContent=''; flash(); },550);
+  $('#status').textContent=ok?'答對':'答錯';
+  $('#flashNumber').textContent=v;
+  voiceState((heard?heard+' → ':'')+(ok?'✓ 正確':'✗ 正確答案 '+target),ok?'ready':'bad');
+  if(q>=c.total){
+    started=false;
+    $('#resultPanel').classList.add('show');
+    $('#finalScore').textContent=correct;
+    $('#finalTotal').textContent=c.total;
+    $('#accuracy').textContent='正確率 '+Math.round(correct/c.total*100)+'%';
+    $('#status').textContent='完成';
+    $('#repeat').disabled=true;
+    return;
+  }
+  q++;head();gen();
+  later(()=>flash(),750);
 }
 function reset(){
-  clear(); q=1; correct=0; gen(); head();
+  clearTimers();window.cancelVoiceAnswer?.();
+  started=false;q=1;correct=0;gen();head();
   document.body.classList.remove('practice');
-  $('#answerPanel').style.display='none';
-  $('#flashNumber').textContent='READY';
-  $('#status').textContent='準備開始';
-  $('#mouth').textContent='0';
+  $('#resultPanel').classList.remove('show');
+  $('#flashNumber').textContent='READY';$('#status').textContent='準備開始';$('#mouth').textContent='0';
   $('#repeat').disabled=true;
-  $('#feedback').textContent='';
+  voiceState(voiceReady?'語音已就緒':'語音引擎載入中…',voiceReady?'ready':'');
 }
-window.startFlash901=()=>{
-  clear(); q=1; correct=0; gen(); head();
+window.voiceEngineReady=()=>{
+  voiceReady=true;
+  $('#start').disabled=false;$('#start').textContent='▶ 開始';
+  if(!started)voiceState('語音已就緒','ready');
+};
+window.voiceEngineError=msg=>{
+  voiceReady=false;$('#start').disabled=true;$('#start').textContent='語音無法啟動';
+  voiceState(msg||'語音引擎載入失敗','bad');
+};
+window.voiceHeardNumber=(n,heard)=>judge(n,heard);
+window.voiceRetry=msg=>{ if(started&&!busy) voiceState(msg||'沒聽清楚，再說一次','listen') };
+
+$('#start').onclick=async()=>{
+  if(!voiceReady)return;
+  $('#start').disabled=true;$('#start').textContent='開啟麥克風…';
+  try{
+    await window.prepareVoiceMic?.();
+  }catch(e){
+    $('#start').disabled=false;$('#start').textContent='▶ 開始';
+    voiceState('請允許麥克風權限','bad');return;
+  }
+  started=true;q=1;correct=0;gen();head();
   document.body.classList.add('practice');
+  $('#resultPanel').classList.remove('show');
+  $('#start').textContent='進行中';
   flash();
 };
-$('#repeat').onclick=()=>{if(!busy)flash()};
-$('#reset').onclick=reset;
+$('#repeat').onclick=()=>{if(!busy&&started)flash()};
+$('#reset').onclick=()=>{reset();if(voiceReady){$('#start').disabled=false;$('#start').textContent='▶ 開始'}};
+$('#speed').oninput=()=>$('#speedText').textContent=(+$('#speed').value).toFixed(1)+' 秒';
+$('#level').onchange=reset;$('#questions').onchange=reset;
+reset();
+})();
+</script>
 
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let rec=null,recBusy=false;
+<script type="module">
+import { initKWSModule, createKeywordSpotter } from "https://cdn.jsdelivr.net/npm/@sherpaw/kws@0.2.1/dist/core.js";
 
-function speechMsg(msg,ok=false){
-  $('#feedback').className='feedback '+(ok?'ok':'');
-  $('#feedback').textContent=msg;
-}
-function applySpeechResult(e){
-  let found=null,raw='';
-  outer:for(let i=e.resultIndex||0;i<e.results.length;i++){
-    for(let j=0;j<e.results[i].length;j++){
-      raw=(e.results[i][j].transcript||'').trim();
-      let v=num(raw);
-      if(!Number.isNaN(v)){found=v;break outer}
+const MODEL="https://huggingface.co/moeru-ai/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/resolve/main/install/bin/wasm/";
+let moduleKws=null,spotter=null,stream=null,audioCtx=null,source=null,processor=null;
+let listening=false,heard=[],speechSeen=false,silenceMs=0,lastHitAt=0,processing=false;
+
+const keywords=[
+  {label:'零',matches:[{tokens:['l','íng'],threshold:.22}]},
+  {label:'一',matches:[{tokens:['y','ī'],threshold:.22},{tokens:['y','í'],threshold:.22},{tokens:['y','ì'],threshold:.22}]},
+  {label:'二',matches:[{tokens:['èr'],threshold:.22}]},
+  {label:'兩',matches:[{tokens:['l','iǎng'],threshold:.22}]},
+  {label:'三',matches:[{tokens:['s','ān'],threshold:.22}]},
+  {label:'四',matches:[{tokens:['s','ì'],threshold:.22}]},
+  {label:'五',matches:[{tokens:['w','ǔ'],threshold:.22}]},
+  {label:'六',matches:[{tokens:['l','iù'],threshold:.22}]},
+  {label:'七',matches:[{tokens:['q','ī'],threshold:.22}]},
+  {label:'八',matches:[{tokens:['b','ā'],threshold:.22}]},
+  {label:'九',matches:[{tokens:['j','iǔ'],threshold:.22}]},
+  {label:'十',matches:[{tokens:['sh','í'],threshold:.20}]},
+  {label:'百',matches:[{tokens:['b','ǎi'],threshold:.20}]},
+  {label:'千',matches:[{tokens:['q','iān'],threshold:.20}]}
+];
+
+function parseNumberTokens(t){
+  if(!t.length)return NaN;
+  const d={'零':0,'一':1,'二':2,'兩':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+  const units={'十':10,'百':100,'千':1000};
+  const hasUnit=t.some(x=>units[x]);
+  if(!hasUnit){
+    const vals=t.filter(x=>d[x]!==undefined).map(x=>d[x]);
+    if(!vals.length)return NaN;
+    return vals.length===1?vals[0]:Number(vals.join(''));
+  }
+  let total=0,cur=null;
+  for(const x of t){
+    if(d[x]!==undefined){cur=d[x];continue}
+    if(units[x]){
+      const n=cur===null?1:cur;
+      total+=n*units[x];cur=null;
     }
   }
-  if(found!==null){
-    $('#answer').value=found;
-    speechMsg('聽到：'+raw+' → '+found,true);
-    $('#answer').focus();
-  }else{
-    speechMsg('有聽到聲音，但不是可辨識的數字，可直接輸入或再按 🎤');
+  if(cur!==null)total+=cur;
+  return total;
+}
+function rms(a){
+  let s=0;for(let i=0;i<a.length;i++)s+=a[i]*a[i];
+  return Math.sqrt(s/a.length);
+}
+function mountPack(mod,data,meta){
+  const bytes=new Uint8Array(data);
+  for(const f of meta.files){
+    const name=f.filename.startsWith('/')?f.filename.slice(1):f.filename;
+    try{ if(mod.FS.analyzePath('/'+name).exists) mod.FS.unlink('/'+name) }catch(e){}
+    mod.FS_createDataFile('/',name,bytes.subarray(f.start,f.end),true,true,true);
   }
 }
-function makeRecognition(local){
-  let r=new SR();
-  r.lang='zh-TW';
-  r.continuous=false;
-  r.interimResults=false;
-  r.maxAlternatives=5;
-  if(local && 'processLocally' in r) r.processLocally=true;
-  r.onstart=()=>{recBusy=true;mic('🔴',1);speechMsg('正在聽…請直接說數字，例如「三十七」')};
-  r.onspeechstart=()=>speechMsg('聽到聲音了…');
-  r.onresult=applySpeechResult;
-  r.onerror=e=>{
-    recBusy=false;mic('🎤');
-    let map={
-      'not-allowed':'麥克風未允許，請允許麥克風權限',
-      'audio-capture':'找不到麥克風',
-      'no-speech':'沒有聽到聲音，請靠近一點再說一次',
-      'network':'瀏覽器語音服務連線失敗',
-      'language-not-supported':'此瀏覽器沒有繁中離線語音包'
-    };
-    speechMsg(map[e.error]||('語音錯誤：'+e.error));
-  };
-  r.onend=()=>{recBusy=false;mic('🎤')};
-  return r;
+async function loadVoice(){
+  try{
+    const [d,m]=await Promise.all([
+      fetch(MODEL+'preload.data',{cache:'force-cache'}),
+      fetch(MODEL+'preload.js.metadata',{cache:'force-cache'})
+    ]);
+    if(!d.ok||!m.ok)throw new Error('模型載入失敗');
+    const [data,meta]=await Promise.all([d.arrayBuffer(),m.json()]);
+    moduleKws=await initKWSModule();
+    mountPack(moduleKws,data,meta);
+    spotter=createKeywordSpotter(moduleKws,{
+      model:{encoder:'encoder.onnx',decoder:'decoder.onnx',joiner:'joiner.onnx',tokens:'tokens.txt'},
+      keywords,maxActivePaths:4
+    });
+    window.voiceEngineReady();
+  }catch(e){
+    console.error(e);
+    window.voiceEngineError('本機數字語音載入失敗，請重新整理頁面');
+  }
 }
-async function startVoice(){
-  if(!SR){speechMsg('此瀏覽器不支援網頁語音辨識；仍可直接輸入答案');return}
-  if(recBusy)return;
-  $('#answer').blur();
-  speechMsg('準備麥克風…');
-
-  // Newer browsers: prefer on-device recognition to avoid the failing network speech service.
-  if(window.SpeechRecognition && typeof SpeechRecognition.available==='function'){
+window.prepareVoiceMic=async()=>{
+  if(audioCtx&&stream)return;
+  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended')await audioCtx.resume();
+  source=audioCtx.createMediaStreamSource(stream);
+  processor=audioCtx.createScriptProcessor(2048,1,1);
+  source.connect(processor);
+  processor.connect(audioCtx.destination);
+  processor.onaudioprocess=e=>{
+    if(!listening||!spotter||processing)return;
+    const chunk=new Float32Array(e.inputBuffer.getChannelData(0));
+    const level=rms(chunk);
+    if(level>.018){speechSeen=true;silenceMs=0}
+    else if(speechSeen)silenceMs+=chunk.length/audioCtx.sampleRate*1000;
+    processing=true;
     try{
-      let state=await SpeechRecognition.available({langs:['zh-TW'],processLocally:true});
-      if(state==='downloadable' || state==='downloading'){
-        speechMsg(state==='downloadable'?'正在安裝繁中語音包，第一次會稍等…':'繁中語音包下載中…');
-        if(state==='downloadable' && typeof SpeechRecognition.install==='function'){
-          let ok=await SpeechRecognition.install({langs:['zh-TW'],processLocally:true});
-          if(ok){rec=makeRecognition(true);rec.start();return}
-        }
-      }else if(state==='available'){
-        rec=makeRecognition(true);rec.start();return
+      const hits=spotter.processAudio(chunk,audioCtx.sampleRate);
+      const now=performance.now();
+      for(const h of hits){
+        if(now-lastHitAt<120&&heard.at(-1)===h.label)continue;
+        heard.push(h.label);lastHitAt=now;speechSeen=true;silenceMs=0;
       }
-    }catch(e){}
+    }catch(err){console.error(err)}
+    finally{processing=false}
+    if(speechSeen&&silenceMs>520)finishUtterance();
+  };
+};
+window.beginVoiceAnswer=()=>{
+  if(!spotter)return;
+  heard=[];speechSeen=false;silenceMs=0;lastHitAt=0;listening=true;
+  try{spotter.reset()}catch(e){}
+};
+window.cancelVoiceAnswer=()=>{listening=false;heard=[];speechSeen=false;silenceMs=0};
+function finishUtterance(){
+  if(!listening)return;
+  listening=false;
+  const tokens=[...heard];
+  const n=parseNumberTokens(tokens);
+  if(Number.isFinite(n)){
+    window.voiceHeardNumber(n,tokens.join(''));
+  }else{
+    window.voiceRetry('沒聽清楚，再說一次');
+    setTimeout(()=>window.beginVoiceAnswer(),350);
   }
-
-  // Compatibility fallback.
-  try{rec=makeRecognition(false);rec.start()}
-  catch(e){speechMsg('無法啟動語音，可直接輸入答案')}
 }
-$('#mic').onclick=e=>{e.preventDefault();startVoice()};
-$('#submit').onclick=submit;$('#answer').onkeydown=e=>{if(e.key==='Enter')submit()};$('#speed').oninput=()=>$('#speedText').textContent=(+$('#speed').value).toFixed(1)+' 秒';$('#level').onchange=reset;$('#questions').onchange=reset;reset()})();
-</script></body></html>
+loadVoice();
+</script>
+</body>
+</html>
