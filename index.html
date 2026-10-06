@@ -2,71 +2,363 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>閃算語音測試</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<title>一年級 901｜閃算訓練</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;color:#171717}
-main{max-width:560px;margin:auto;padding:22px}
-.card{background:#fff;border:1px solid #d9dee7;border-radius:20px;padding:22px;margin-top:16px}
-h1{font-size:27px;margin:4px 0}.sub{color:#667085}
-button{width:100%;min-height:58px;border:0;border-radius:14px;font-size:20px;font-weight:800;background:#2563eb;color:#fff;margin-top:14px}
-.state{text-align:center;font-size:21px;font-weight:800;margin:22px 0 10px}
-.heard{text-align:center;font-size:64px;font-weight:900;min-height:90px}
-.raw{text-align:center;color:#667085;min-height:30px}
-.ok{color:#15803d}.bad{color:#b91c1c}
-.note{font-size:14px;line-height:1.7;color:#667085}
+:root{--bg:#f5f6f8;--card:#fff;--text:#171717;--muted:#6b7280;--line:#d8dce3;--accent:#2563eb;--ok:#15803d;--bad:#b91c1c}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif}
+.app{max-width:760px;margin:auto;padding:18px;padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right));padding-bottom:max(22px,env(safe-area-inset-bottom));touch-action:manipulation}.top{display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap}
+.sub{color:var(--muted);font-size:14px}.title{font-size:25px;font-weight:800;margin-top:3px}.stats{display:flex;gap:8px}
+.pill,.card{background:var(--card);border:1px solid var(--line);border-radius:13px}.pill{padding:9px 12px;font-size:14px}.card{padding:16px;margin-top:14px}
+.settings{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{font-size:14px;font-weight:700;display:block;margin-bottom:6px}
+select,input[type=number]{width:100%;min-height:46px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:8px 11px;font-size:16px}
+input[type=range]{width:100%}.speedrow{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.stage{min-height:300px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
+.status{align-self:stretch;display:flex;justify-content:space-between;color:var(--muted);font-size:14px;margin-bottom:18px}
+.flash{font-size:clamp(80px,20vw,150px);font-weight:900;line-height:1;min-height:155px;display:flex;align-items:center}
+.hint{color:var(--muted);font-size:14px;margin-top:20px}.actions{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+button{min-height:52px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:10px 18px;font-size:17px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button:disabled{opacity:.45;cursor:not-allowed}
+.answer{display:none}.answer.show{display:block}.answergrid{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+#answer{font-size:25px;font-weight:800}.feedback{min-height:25px;margin-top:10px;font-weight:700}.ok{color:var(--ok)}.bad{color:var(--bad)}
+.result{display:none;text-align:center}.result.show{display:block}.score{font-size:45px;font-weight:900}
+body.practice #settingsPanel{display:none}
+body.practice .app{padding-top:8px}
+body.practice .card.stage{margin-top:8px;min-height:220px}
+body.practice .answer.show{margin-top:8px}
+body.practice #practiceActions{margin-top:8px}
+@media(max-width:600px){
+ .settings{grid-template-columns:1fr}
+ .app{padding-top:12px}
+ .top{align-items:flex-start}
+ .title{font-size:21px}
+ .stats{width:100%}.pill{flex:1;text-align:center}
+ .card{padding:13px;margin-top:10px}
+ .stage{min-height:230px;padding-top:8px;padding-bottom:8px}
+ body.practice .stage{min-height:205px}
+ body.practice .flash{min-height:118px}
+ body.practice .status{margin-bottom:8px}
+ body.practice .hint{margin-top:8px}
+ body.practice .answer{padding:10px}
+ body.practice #answer{min-height:48px}
+ body.practice .actions button{min-height:46px}
+ .flash{font-size:clamp(76px,28vw,128px);min-height:135px}
+ .actions{display:grid;grid-template-columns:1fr 1fr;margin-top:10px}
+ .actions #start{grid-column:1/-1}
+ .actions button{width:100%}
+ .answergrid{grid-template-columns:1fr}
+ .answergrid button{width:100%}
+ select,input[type=number],#answer{font-size:18px}
+ input[type=range]{min-height:44px}
+}
+
+.modebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.headmain{min-width:0;flex:1}
+.topactions{display:flex;gap:6px;flex-wrap:wrap}
+.topactions button{min-height:38px;padding:6px 10px;font-size:14px;border-radius:9px}
+.answerinput{display:flex;gap:7px;align-items:center}
+.answerinput input{flex:1;min-width:0}
+.voiceState{white-space:nowrap;font-size:14px;font-weight:800;padding:9px 8px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.voiceState.listening{animation:micpulse .8s infinite alternate}
+@keyframes micpulse{from{transform:scale(1)}to{transform:scale(1.08)}}
+@media(max-width:600px){
+ .top{display:block}
+ .modebar{display:block}
+ .topactions{display:grid;grid-template-columns:1fr 1fr 1fr;margin-top:7px}
+ .topactions button{width:100%;font-size:12px;padding:5px 3px;min-height:40px}
+ .stats{margin-top:7px}
+ body.practice .topactions{display:grid}
+}
 </style>
 </head>
 <body>
-<main>
-<h1>閃算｜語音辨識測試</h1>
-<div class="sub">先只測一件事：說「13」，畫面必須顯示 13。</div>
-<section class="card">
-  <div id="state" class="state">尚未開始</div>
-  <div id="heard" class="heard">—</div>
-  <div id="raw" class="raw"></div>
-  <button id="start">🎙 開始聽答案</button>
-</section>
-<section class="card note">
-請用 GitHub Pages 的 HTTPS 網址開啟本頁。第一次使用請允許麥克風。按一次「開始聽答案」後直接說「13」或「十三」。<br>
-如果成功，會顯示「13」；如果瀏覽器不支援，頁面會直接顯示原因。
-</section>
-</main>
-<script>
-const state=document.getElementById('state'), heard=document.getElementById('heard'), raw=document.getElementById('raw'), btn=document.getElementById('start');
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let rec=null;
+<main class="app">
+  <header class="top">
+    <div class="headmain">
+      <div class="sub">一年級組 901｜閃算訓練</div>
+      <div class="modebar">
+        <div class="title" id="modeTitle">十級心算｜一位數 4 口</div>
+        <div class="topactions" id="practiceActions">
+          <button class="primary" id="start">▶ 開始閃算</button>
+          <button id="repeat" disabled>↻ 重播本題</button>
+          <button id="reset">重新設定</button>
+        </div>
+      </div>
+    </div>
+    <div class="stats"><div class="pill">第 <b id="qno">1</b>/<b id="qtotal">15</b> 題</div><div class="pill">正確 <b id="correct">0</b></div></div>
+  </header>
 
-function parseNum(raw){
- let x=(raw||'').trim().replace(/[，。,.！!？?、\s]/g,'').replace(/^(答案是|答案為|答案|等於|是)/,'');
- let neg=/^(負|负)/.test(x); x=x.replace(/^(負|负)/,'');
+  <section class="card settings" id="settingsPanel">
+    <div><label for="level">訓練級別</label><select id="level"><option value="10a" selected>十級｜一位數 4口</option>
+<option value="10b">十級｜一位／二位數 3口</option>
+<option value="9a">九級｜一位數 5口</option>
+<option value="9b">九級｜一位／二位數 4口</option></select></div>
+    <div><label for="speed">每口顯示時間：<b id="speedText">0.8 秒</b></label><input id="speed" type="range" min="0.1" max="1" step="0.1" value="0.8"><div class="speedrow"><span>0.1秒</span><span>快 ← → 慢</span><span>1.0秒</span></div></div>
+    <div><label for="questions">題數</label><select id="questions"><option value="15">15題｜正式訓練</option><option value="30">30題｜同分加賽</option><option value="10">10題｜快速練習</option></select></div>
+    <div><label for="gap">數字間隔</label><select id="gap"><option value="0">連續閃現（自動防黏字）</option><option value="100">間隔 0.1秒</option><option value="200">間隔 0.2秒</option></select></div>
+  </section>
+
+  <section class="card stage">
+    <div class="status"><span id="status">準備開始</span><span>第 <b id="mouth">0</b>/<b id="mouthTotal">4</b> 口</span></div>
+    <div class="flash" id="flashNumber">READY</div>
+    <div class="hint">按開始後，數字會逐口閃現；第一次使用會先載入約 42MB 中文語音模型</div>
+  </section>
+
+  <section class="card answer" id="answerPanel">
+    <div class="answergrid">
+      <div><label for="answer">答案</label><div class="answerinput"><input id="answer" inputmode="numeric" autocomplete="off" placeholder="輸入答案"><span id="mic" class="voiceState" aria-live="polite">🎙️待機</span></div></div>
+      <button class="primary" id="submit">確定</button>
+    </div>
+    <div class="feedback" id="feedback"></div>
+  </section>
+
+  
+
+  
+
+  <section class="card result" id="resultPanel">
+    <div class="sub">本次成績</div><div class="score"><span id="finalScore">0</span> / <span id="finalTotal">15</span></div><div id="accuracy"></div>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/vosk-browser@0.0.5/dist/vosk.js"></script>
+<script>
+(()=>{
+const $=s=>document.querySelector(s);
+let terms=[],target=0,q=1,correct=0,busy=false,timers=[];
+function cfg(){
+ const lv=$('#level').value;
+ const map={
+  '10a':{name:'十級心算｜一位數 4 口',mouths:4,mixed:false},
+  '10b':{name:'十級心算｜一位／二位數 3 口',mouths:3,mixed:true},
+  '9a':{name:'九級心算｜一位數 5 口',mouths:5,mixed:false},
+  '9b':{name:'九級心算｜一位／二位數 4 口',mouths:4,mixed:true}
+ };
+ return{lv,...map[lv],total:+$('#questions').value,speed:Math.round(+$('#speed').value*1000),gap:+$('#gap').value}
+}
+function clearTimers(){timers.forEach(clearTimeout);timers=[];busy=false}
+function later(fn,ms){timers.push(setTimeout(fn,ms))}
+function generate(){
+ const c=cfg(); let a=[],sum=0;
+ for(let i=0;i<c.mouths;i++){
+   let max=c.mixed ? 99 : 9;
+   let min=c.mixed && Math.random()<0.65 ? 10 : 1;
+   let n=min+Math.floor(Math.random()*(max-min+1));
+   if(i>0 && Math.random()<.32 && sum-n>=0)n=-n;
+   sum+=n;a.push(n);
+ }
+ terms=a;target=sum;$('#mouthTotal').textContent=c.mouths;
+}
+function header(){const c=cfg();$('#modeTitle').textContent=c.name;$('#qno').textContent=q;$('#qtotal').textContent=c.total;$('#correct').textContent=correct}
+
+let audioCtx=null;
+function audio(){
+ try{
+  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  return audioCtx;
+ }catch(e){return null}
+}
+function tone(freq,start,duration,type='sine',gain=.10){
+ const a=audio(); if(!a)return;
+ const o=a.createOscillator(),g=a.createGain(),t=a.currentTime;
+ o.type=type;o.frequency.setValueAtTime(freq,t+start);
+ g.gain.setValueAtTime(.0001,t+start);
+ g.gain.exponentialRampToValueAtTime(gain,t+start+.012);
+ g.gain.exponentialRampToValueAtTime(.0001,t+start+duration);
+ o.connect(g);g.connect(a.destination);o.start(t+start);o.stop(t+start+duration+.03);
+}
+function soundCorrect(){
+ tone(523.25,0,.12,'sine',.10);tone(659.25,.085,.13,'sine',.105);
+ tone(783.99,.17,.19,'sine',.11);tone(1046.5,.27,.24,'sine',.075);
+}
+function soundWrong(){
+ tone(392,0,.14,'triangle',.075);tone(311.13,.12,.18,'triangle',.07);
+ tone(246.94,.27,.22,'triangle',.065);
+}
+
+
+
+
+
+let voskModel=null, recognizer=null, mediaStream=null, voiceAudioCtx=null;
+let recognizerNode=null, micSource=null, voiceReady=false, voiceLoading=false, answerOpen=false;
+let lastPartial='', partialStableTimer=null;
+
+function setMic(text, listening=false){
+ const s=$('#mic'); s.textContent=text; s.classList.toggle('listening',listening);
+}
+
+function parseSpokenNumber(raw){
+ let x=(raw||'').trim()
+   .replace(/[，。,.！!？?、\s]/g,'')
+   .replace(/^(答案是|答案為|答案|等於|是)/,'');
+ let neg=/^(負|负|minus)/i.test(x);
+ x=x.replace(/^(負|负|minus)/i,'');
  if(/^\d+$/.test(x)) return (neg?'-':'')+String(parseInt(x,10));
  const d={'零':0,'〇':0,'一':1,'二':2,'兩':2,'两':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
- let n=0;
- if(x.includes('百')){let [a,r]=x.split('百');n+=(a?d[a]:1)*100;x=r||''}
- if(x.includes('十')){let [a,b]=x.split('十');n+=(a?d[a]:1)*10;if(b)n+=d[b]??0}
- else if(x){if(x.length===1&&d[x]!==undefined)n+=d[x];else{let ds=[...x].map(c=>d[c]);if(ds.some(v=>v===undefined))return '';n=parseInt(ds.join(''),10)}}
- return (neg?'-':'')+String(n);
+ let n=0, seen=false;
+ if(x.includes('百')){
+   let [a,rest]=x.split('百');
+   if(a && d[a]===undefined)return '';
+   n+=(a?d[a]:1)*100; x=rest||''; seen=true;
+ }
+ if(x.includes('十')){
+   let [a,b]=x.split('十');
+   if(a && d[a]===undefined)return '';
+   n+=(a?d[a]:1)*10;
+   if(b){if(d[b]===undefined)return '';n+=d[b]}
+   seen=true;
+ }else if(x){
+   if(x.length===1 && d[x]!==undefined){n+=d[x];seen=true}
+   else{
+     let digits=[...x].map(c=>d[c]);
+     if(digits.some(v=>v===undefined))return '';
+     n=parseInt(digits.join(''),10);seen=true;
+   }
+ }
+ return seen ? (neg?'-':'')+String(n) : '';
 }
-if(!SR){
- state.textContent='此瀏覽器沒有 SpeechRecognition';
- state.className='state bad'; btn.disabled=true; btn.style.opacity=.45;
-}else{
- rec=new SR(); rec.lang='zh-TW'; rec.continuous=false; rec.interimResults=false; rec.maxAlternatives=5;
- rec.onstart=()=>{state.textContent='🔴 正在聽，請說答案';state.className='state';heard.textContent='…';raw.textContent=''};
- rec.onresult=e=>{
-   const text=e.results[0][0].transcript;
-   const n=parseNum(text);
-   raw.textContent='原始辨識：'+text;
-   if(n!==''){heard.textContent=n;state.textContent='✓ 辨識成功';state.className='state ok'}
-   else{heard.textContent='？';state.textContent='有聽到，但不是可辨識的數字';state.className='state bad'}
- };
- rec.onerror=e=>{heard.textContent='×';state.textContent='辨識錯誤：'+e.error;state.className='state bad';raw.textContent='請確認麥克風權限與 HTTPS 網址'};
- rec.onend=()=>{btn.disabled=false};
- btn.onclick=()=>{
-   btn.disabled=true;
-   try{rec.start()}catch(e){state.textContent='無法啟動：'+e.message;state.className='state bad';btn.disabled=false}
- };
+
+function acceptVoiceText(text, isFinal=false){
+ if(!answerOpen)return;
+ const n=parseSpokenNumber(text);
+ if(n==='')return;
+ lastPartial=n;
+ setMic('🎙️ 聽到 '+n+'…',true);
+ clearTimeout(partialStableTimer);
+ // 心算只需要數字；停頓約 0.65 秒就直接送出，不必等 Vosk 長句終點。
+ partialStableTimer=setTimeout(()=>{
+   if(!answerOpen || lastPartial!==n)return;
+   answerOpen=false;
+   $('#answer').value=n;
+   setMic('✓ 聽到 '+n,false);
+   setTimeout(()=>$('#submit').click(),60);
+ }, isFinal ? 80 : 650);
 }
+
+async function initVosk(){
+ if(voiceReady)return true;
+ if(voiceLoading){
+   while(voiceLoading) await new Promise(r=>setTimeout(r,120));
+   return voiceReady;
+ }
+ voiceLoading=true;
+ try{
+   if(!window.Vosk) throw new Error('Vosk 程式庫載入失敗');
+   setMic('下載中文模型…');
+   $('#status').textContent='第一次使用：載入中文語音模型';
+   voskModel=await Vosk.createModel('model.tar.gz');
+
+   setMic('要求麥克風…');
+   mediaStream=await navigator.mediaDevices.getUserMedia({
+     video:false,
+     audio:{echoCancellation:true,noiseSuppression:true,channelCount:1}
+   });
+
+   voiceAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
+   if(voiceAudioCtx.state==='suspended') await voiceAudioCtx.resume();
+
+   recognizer=new voskModel.KaldiRecognizer(voiceAudioCtx.sampleRate);
+   recognizer.on("result",m=>acceptVoiceText(m.result.text,true));
+   recognizer.on("partialresult",m=>acceptVoiceText(m.result.partial,false));
+
+   recognizerNode=voiceAudioCtx.createScriptProcessor(4096,1,1);
+   recognizerNode.onaudioprocess=e=>{
+     try{ if(recognizer) recognizer.acceptWaveform(e.inputBuffer); }catch(err){console.error(err)}
+   };
+   micSource=voiceAudioCtx.createMediaStreamSource(mediaStream);
+   micSource.connect(recognizerNode);
+   recognizerNode.connect(voiceAudioCtx.destination);
+
+   voiceReady=true;
+   setMic('🎙️ 語音就緒');
+   return true;
+ }catch(err){
+   console.error(err);
+   setMic('語音啟動失敗');
+   $('#feedback').className='feedback bad';
+   $('#feedback').textContent='語音錯誤：'+(err && err.message ? err.message : err);
+   return false;
+ }finally{voiceLoading=false}
+}
+
+function openVoiceAnswer(){
+ answerOpen=true; lastPartial=''; clearTimeout(partialStableTimer);
+ setMic(voiceReady?'🔴 請直接說答案':'🎙️ 語音未就緒',voiceReady);
+}
+function closeVoiceAnswer(){
+ answerOpen=false; lastPartial=''; clearTimeout(partialStableTimer);
+ if(voiceReady)setMic('🎙️ 待機',false);
+}
+
+function flash(){
+ if(busy)return;clearTimers();busy=true;
+ $('#answerPanel').classList.remove('show');$('#feedback').textContent='';$('#repeat').disabled=true;$('#start').disabled=true;
+ $('#flashNumber').textContent='3';$('#status').textContent='準備';$('#mouth').textContent='0';
+ const c=cfg(); later(()=>$('#flashNumber').textContent='2',450);later(()=>$('#flashNumber').textContent='1',900);later(()=>$('#flashNumber').textContent='●',1350);
+ let base=1800;
+ const blankMs=Math.max(55,c.gap);
+ let cursor=base;
+ terms.forEach((n,i)=>{
+   // 每一口先清空，再顯示數字；即使 3 → 3，也一定會產生視覺切換。
+   later(()=>{$('#flashNumber').textContent='';},cursor);
+   cursor+=blankMs;
+   later(()=>{
+     $('#status').textContent='閃算中';
+     $('#mouth').textContent=i+1;
+     $('#flashNumber').textContent=(n<0?'−':'')+Math.abs(n);
+   },cursor);
+   cursor+=c.speed;
+ });
+ const end=cursor+80;
+ later(()=>{$('#flashNumber').textContent='？';$('#status').textContent='請作答';$('#answerPanel').classList.add('show');openVoiceAnswer();$('#repeat').disabled=false;$('#start').disabled=false;busy=false;$('#answer').value='';$('#answer').focus()},end);
+}
+function next(){
+ const c=cfg();if(q>=c.total){finish();return}
+ q++;closeVoiceAnswer();document.body.classList.add('practice');generate();header();$('#answerPanel').classList.remove('show');$('#flashNumber').textContent='READY';$('#status').textContent='下一題準備';$('#mouth').textContent='0';later(flash,600);
+}
+function submit(){
+ const el=$('#answer');if(el.value.trim()==='')return;
+ if(Number(el.value)===target){
+ correct++;$('#correct').textContent=correct;$('#feedback').className='feedback ok';$('#feedback').textContent='✓ 正確';soundCorrect();
+ } else {
+ $('#feedback').className='feedback bad';$('#feedback').textContent='✗ 答案：'+target+'　題目：'+terms.map((x,i)=>(x>0&&i>0?'+':'')+x).join(' ');soundWrong();
+ }
+ $('#submit').disabled=true;later(()=>{$('#submit').disabled=false;next()},1000);
+}
+function finish(){clearTimers();const c=cfg();$('#answerPanel').classList.remove('show');$('#resultPanel').classList.add('show');$('#flashNumber').textContent='完成';$('#status').textContent='訓練完成';$('#finalScore').textContent=correct;$('#finalTotal').textContent=c.total;$('#accuracy').textContent='正確率 '+Math.round(correct/c.total*100)+'%'}
+function reset(){
+ closeVoiceAnswer();
+ clearTimers();q=1;correct=0;generate();header();
+ document.body.classList.remove('practice');
+ $('#resultPanel').classList.remove('show');
+ $('#answerPanel').classList.remove('show');
+ $('#flashNumber').textContent='READY';
+ $('#status').textContent='準備開始';
+ $('#mouth').textContent='0';
+ $('#repeat').disabled=true;$('#start').disabled=false;
+ window.scrollTo(0,0);
+}
+$('#speed').addEventListener('input',()=>$('#speedText').textContent=(+$('#speed').value).toFixed(1)+' 秒');
+$('#level').addEventListener('change',reset);$('#questions').addEventListener('change',reset);
+async function startRun(){
+ if(busy||voiceLoading)return;
+ audio();
+ $('#start').disabled=true;
+ const ok=await initVosk();
+ $('#start').disabled=false;
+ if(!ok)return;
+ document.body.classList.add('practice');
+ generate();
+ flash();
+}
+$('#start').addEventListener('click',startRun);$('#repeat').addEventListener('click',flash);$('#reset').addEventListener('click',reset);$('#submit').addEventListener('click',submit);
+$('#answer').addEventListener('keydown',e=>{if(e.key==='Enter')submit()});
+reset();
+})();
 </script>
-</body></html>
+</body>
+</html>
