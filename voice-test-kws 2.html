@@ -31,7 +31,7 @@ button:disabled{opacity:.45}
 <body>
 <main>
 <section class="card">
-  <h1>本機數字語音測試 <span style="font-size:12px;color:#6b7280">v2.1</span></h1>
+  <h1>本機數字語音測試 <span style="font-size:12px;color:#6b7280">v2.2</span></h1>
   <div class="sub">不使用 Web Speech、不使用 API。每一題只讓模型尋找「目前正確答案」整句，例如目標 12 時只找「十二」，不再同時找「十」。</div>
   <div class="row" style="margin-top:12px">
     <button class="primary" id="start" disabled>載入本機模型中…</button>
@@ -72,6 +72,7 @@ const cases=[12,18,25,37,46,58,72,105];
 let idx=0,passes=0,attempts=0;
 let mod=null,spotter=null,stream=null,audioCtx=null,source=null,processor=null;
 let running=false,processing=false,speechSeen=false,silenceMs=0,caseArmed=false;
+let vocab=new Set(), erVariants=['èr'];
 
 const $=s=>document.querySelector(s);
 const py={
@@ -109,12 +110,36 @@ function toZh(n,liang=false){
   if(r<100)s+='零';
   return s+toZh(r,liang);
 }
-function tokens(text){ return [...text].flatMap(ch=>py[ch]||[]); }
+function tokenVariantsForText(text){
+  let seqs=[[]];
+  for(const ch of [...text]){
+    let opts;
+    if(ch==='二'){
+      opts=erVariants.map(x=>[x]);
+    }else{
+      const base=py[ch]||[];
+      opts=[base];
+    }
+    const next=[];
+    for(const a of seqs)for(const b of opts)next.push(a.concat(b));
+    seqs=next;
+  }
+  return seqs;
+}
 function matchesFor(n){
   const forms=[toZh(n,false)];
   if(n>=200)forms.push(toZh(n,true));
   if(n>=110&&n<120)forms.push('一百十'+(n%10?toZh(n%10):''));
-  return [...new Set(forms)].map(x=>({tokens:tokens(x),threshold:.13,score:3.0}));
+  const hasTwo=String(n).includes('2');
+  const threshold=hasTwo?.075:.13;
+  const score=hasTwo?5.0:3.0;
+  const out=[];
+  for(const form of [...new Set(forms)]){
+    for(const ts of tokenVariantsForText(form)){
+      out.push({tokens:ts,threshold,score});
+    }
+  }
+  return out;
 }
 async function armCase(){
   const n=current();
@@ -125,7 +150,7 @@ async function armCase(){
   await spotter.setKeywords([{label:String(n),matches:matchesFor(n),threshold:.13,score:3.0}],{maxActivePaths:8});
   await spotter.reset();
   caseArmed=true;
-  log('目標 '+n+'：只啟用完整關鍵詞「'+toZh(n)+'」');
+  log('目標 '+n+'：完整關鍵詞「'+toZh(n)+'」；匹配版本 '+matchesFor(n).length+' 組');
 }
 function finish(ok){
   if(!running||!caseArmed)return;
@@ -175,6 +200,15 @@ async function loadModel(){
     const [data,meta]=await Promise.all([d.arrayBuffer(),m.json()]);
     mod=await initKWSModule();
     mountPack(mod,data,meta);
+    try{
+      const txt=mod.FS.readFile('tokens.txt',{encoding:'utf8'});
+      vocab=new Set(txt.split(/\r?\n/).map(x=>x.trim().split(/\s+/)[0]).filter(Boolean));
+      erVariants=['èr','ér','ěr','ēr'].filter(x=>vocab.has(x));
+      if(!erVariants.length)erVariants=['èr'];
+      log('「二」啟用音調變體：'+erVariants.join(' / '));
+    }catch(e){
+      erVariants=['èr'];
+    }
     spotter=createKeywordSpotter(mod,{
       model:{encoder:'encoder.onnx',decoder:'decoder.onnx',joiner:'joiner.onnx',tokens:'tokens.txt'},
       keywords:[{label:'12',matches:matchesFor(12),threshold:.13,score:3.0}],
