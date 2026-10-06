@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>兒童數字語音校準測試</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f6f8;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#111}
+main{max-width:760px;margin:auto;padding:14px}
+.card{background:#fff;border:1px solid #d9dde5;border-radius:14px;padding:16px;margin-bottom:12px}
+h1{font-size:23px;margin:0 0 5px}.sub{font-size:14px;color:#667085;line-height:1.55}
+button{min-height:48px;border:1px solid #cfd5df;border-radius:11px;background:#fff;padding:9px 14px;font-size:16px;font-weight:800}
+button.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+button.danger{color:#b91c1c} button:disabled{opacity:.45}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.big{text-align:center;font-size:72px;font-weight:900;line-height:1.2;margin:10px 0}
+.state{text-align:center;font-size:21px;font-weight:900;min-height:32px}
+.meter{height:18px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:9px 0}
+.meter>div{height:100%;width:0;background:#111;border-radius:999px;transition:width .05s linear}
+.progress{height:12px;background:#e5e7eb;border-radius:999px;overflow:hidden}.progress>div{height:100%;width:0;background:#2563eb}
+.tokens{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px}
+.token{border:1px solid #d9dde5;border-radius:9px;text-align:center;padding:8px 2px;font-weight:800}
+.token.done{background:#dcfce7;border-color:#86efac}
+.token.active{outline:3px solid #93c5fd}
+.tests{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}
+.test{padding:10px;border-radius:9px;border:1px solid #d9dde5;text-align:center;font-weight:900}
+.test.pass{background:#dcfce7;border-color:#86efac}.test.fail{background:#fee2e2;border-color:#fca5a5}
+.ok{color:#15803d}.bad{color:#b91c1c}.listen{color:#2563eb}
+.result{text-align:center;font-size:38px;font-weight:900;min-height:54px}
+.small{font-size:13px;color:#667085;line-height:1.5}
+.log{font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;background:#f8fafc;border-radius:9px;padding:10px;max-height:170px;overflow:auto}
+@media(max-width:600px){
+ .tokens{grid-template-columns:repeat(5,1fr)} .tests{grid-template-columns:repeat(2,1fr)}
+ .big{font-size:62px}
+}
+</style>
+</head>
+<body>
+<main>
+<section class="card">
+  <h1>兒童數字語音校準測試 <span style="font-size:12px;color:#667085">v3.0</span></h1>
+  <div class="sub">完全本機、沒有 API、沒有大型語音模型。先讓這支手機認得同一個孩子的 13 個數字聲音。每個字只錄 3 次，校準資料只存在這個瀏覽器。</div>
+</section>
+
+<section class="card">
+  <div class="small">麥克風收音強度</div>
+  <div class="meter"><div id="meter"></div></div>
+  <div class="state" id="state">尚未開始</div>
+  <div class="row" style="margin-top:10px">
+    <button class="primary" id="calibrate">開始語音校準</button>
+    <button id="testBtn" disabled>開始辨識測試</button>
+    <button class="danger" id="clearBtn">清除校準</button>
+  </div>
+</section>
+
+<section class="card" id="workCard">
+  <div class="small" style="text-align:center" id="instruction">先按「開始語音校準」</div>
+  <div class="big" id="prompt">—</div>
+  <div class="state" id="captureState"></div>
+  <div class="progress"><div id="progressBar"></div></div>
+  <div class="tokens" id="tokens"></div>
+</section>
+
+<section class="card">
+  <div class="small">固定辨識測試：12、18、25、37、46、58、72、105</div>
+  <div class="tests" id="tests"></div>
+  <div class="result" id="result">—</div>
+  <div class="small" id="detail" style="text-align:center"></div>
+</section>
+
+<section class="card">
+  <div class="small">狀態紀錄</div>
+  <div class="log" id="log"></div>
+</section>
+</main>
+
+<script>
+(()=>{
+const TOKENS=['零','一','二','三','四','五','六','七','八','九','十','百','千'];
+const TESTS=[12,18,25,37,46,58,72,105];
+const STORE='flash901_voice_cal_v3';
+const $=s=>document.querySelector(s);
+
+let samples={};
+let mode='idle'; // idle | calibrate | test
+let tokenIndex=0,sampleIndex=0,testIndex=0,pass=0,attempts=0;
+let stream=null,audioCtx=null,source=null,processor=null;
+let waiting=true,recording=false,recChunks=[],preRoll=[],silenceMs=0,voiceMs=0;
+let noiseFloor=.006,gate=.015,calibratedMic=false;
+
+function log(msg){
+  $('#log').textContent+=`[${new Date().toLocaleTimeString()}] ${msg}\n`;
+  $('#log').scrollTop=$('#log').scrollHeight;
+}
+function state(t,c=''){ $('#state').className='state '+c; $('#state').textContent=t; }
+function cap(t,c=''){ $('#captureState').className='state '+c; $('#captureState').textContent=t; }
+function renderTokens(){
+  $('#tokens').innerHTML=TOKENS.map((t,i)=>{
+    const n=(samples[t]||[]).length;
+    return `<div class="token ${n>=3?'done':''} ${mode==='calibrate'&&i===tokenIndex?'active':''}" id="tok${i}">${t}<br><span style="font-size:11px;color:#667085">${n}/3</span></div>`;
+  }).join('');
+}
+function renderTests(){
+  $('#tests').innerHTML=TESTS.map((n,i)=>`<div class="test" id="test${i}">${n}</div>`).join('');
+}
+function save(){
+  localStorage.setItem(STORE,JSON.stringify(samples));
+  updateButtons();
+}
+function load(){
+  try{ samples=JSON.parse(localStorage.getItem(STORE)||'{}')||{} }catch(e){samples={}}
+  renderTokens();updateButtons();
+}
+function ready(){
+  return TOKENS.every(t=>(samples[t]||[]).length>=3);
+}
+function updateButtons(){
+  $('#testBtn').disabled=!ready()||mode!=='idle';
+  $('#calibrate').disabled=mode!=='idle';
+}
+function resetCapture(){
+  waiting=true;recording=false;recChunks=[];preRoll=[];silenceMs=0;voiceMs=0;
+}
+function concatChunks(chunks){
+  let n=chunks.reduce((a,c)=>a+c.length,0), out=new Float32Array(n),p=0;
+  for(const c of chunks){out.set(c,p);p+=c.length}
+  return out;
+}
+function rms(a){
+  let s=0;for(let i=0;i<a.length;i++)s+=a[i]*a[i];
+  return Math.sqrt(s/a.length);
+}
+function resample16k(x,sr){
+  if(sr===16000)return x;
+  const ratio=sr/16000, n=Math.max(1,Math.floor(x.length/ratio)), y=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const pos=i*ratio, a=Math.floor(pos), b=Math.min(x.length-1,a+1), f=pos-a;
+    y[i]=x[a]*(1-f)+x[b]*f;
+  }
+  return y;
+}
+function trim(x){
+  let max=0;for(const v of x)max=Math.max(max,Math.abs(v));
+  const th=Math.max(.008,max*.09), pad=800;
+  let a=0,b=x.length-1;
+  while(a<x.length&&Math.abs(x[a])<th)a++;
+  while(b>a&&Math.abs(x[b])<th)b--;
+  a=Math.max(0,a-pad);b=Math.min(x.length-1,b+pad);
+  return x.slice(a,b+1);
+}
+function fftPower(frame,N=512){
+  const re=new Float32Array(N),im=new Float32Array(N);
+  const L=Math.min(frame.length,N);
+  for(let i=0;i<L;i++)re[i]=frame[i]*(.5-.5*Math.cos(2*Math.PI*i/(L-1)));
+  for(let i=1,j=0;i<N;i++){
+    let bit=N>>1;
+    for(;j&bit;bit>>=1)j^=bit;
+    j^=bit;
+    if(i<j){let t=re[i];re[i]=re[j];re[j]=t}
+  }
+  for(let len=2;len<=N;len<<=1){
+    const ang=-2*Math.PI/len,wr0=Math.cos(ang),wi0=Math.sin(ang);
+    for(let i=0;i<N;i+=len){
+      let wr=1,wi=0;
+      for(let j=0;j<len/2;j++){
+        const u=i+j,v=i+j+len/2;
+        const tr=wr*re[v]-wi*im[v],ti=wr*im[v]+wi*re[v];
+        re[v]=re[u]-tr;im[v]=im[u]-ti;re[u]+=tr;im[u]+=ti;
+        const nwr=wr*wr0-wi*wi0;wi=wr*wi0+wi*wr0;wr=nwr;
+      }
+    }
+  }
+  const p=new Float32Array(N/2+1);
+  for(let i=0;i<p.length;i++)p[i]=(re[i]*re[i]+im[i]*im[i])/N;
+  return p;
+}
+function hzMel(h){return 2595*Math.log10(1+h/700)}
+function melHz(m){return 700*(Math.pow(10,m/2595)-1)}
+function mfccFrames(x){
+  x=trim(resample16k(x,audioCtx.sampleRate));
+  if(x.length<1600)return [];
+  const sr=16000,frame=400,hop=160,N=512,M=20,C=13;
+  const lo=hzMel(100),hi=hzMel(7600),pts=[];
+  for(let i=0;i<M+2;i++)pts.push(Math.floor((N+1)*melHz(lo+(hi-lo)*i/(M+1))/sr));
+  const out=[];
+  for(let st=0;st+frame<=x.length;st+=hop){
+    const fr=new Float32Array(frame);
+    let prev=0;
+    for(let i=0;i<frame;i++){const cur=x[st+i];fr[i]=cur-.97*prev;prev=cur}
+    const pow=fftPower(fr,N),mel=new Float32Array(M);
+    for(let m=1;m<=M;m++){
+      let sum=0;
+      for(let k=pts[m-1];k<pts[m];k++)sum+=pow[k]*(k-pts[m-1])/Math.max(1,pts[m]-pts[m-1]);
+      for(let k=pts[m];k<pts[m+1];k++)sum+=pow[k]*(pts[m+1]-k)/Math.max(1,pts[m+1]-pts[m]);
+      mel[m-1]=Math.log(sum+1e-8);
+    }
+    const cep=new Float32Array(C);
+    for(let c=0;c<C;c++){
+      let sum=0;
+      for(let m=0;m<M;m++)sum+=mel[m]*Math.cos(Math.PI*c*(m+.5)/M);
+      cep[c]=sum;
+    }
+    // drop absolute loudness influence by normalizing each frame
+    let norm=0;for(let c=1;c<C;c++)norm+=cep[c]*cep[c];
+    norm=Math.sqrt(norm)+1e-6;
+    for(let c=1;c<C;c++)cep[c]/=norm;
+    cep[0]=0;
+    out.push(cep);
+  }
+  return out;
+}
+function fixedVector(x){
+  const fs=mfccFrames(x),T=24,D=13;
+  if(fs.length<3)return null;
+  const v=new Float32Array(T*D);
+  for(let t=0;t<T;t++){
+    const pos=t*(fs.length-1)/(T-1),a=Math.floor(pos),b=Math.min(fs.length-1,a+1),f=pos-a;
+    for(let d=0;d<D;d++)v[t*D+d]=fs[a][d]*(1-f)+fs[b][d]*f;
+  }
+  let norm=0;for(const z of v)norm+=z*z;norm=Math.sqrt(norm)+1e-7;
+  for(let i=0;i<v.length;i++)v[i]/=norm;
+  return Array.from(v);
+}
+function cosineDist(a,b){
+  let dot=0,aa=0,bb=0;
+  const n=Math.min(a.length,b.length);
+  for(let i=0;i<n;i++){dot+=a[i]*b[i];aa+=a[i]*a[i];bb+=b[i]*b[i]}
+  return 1-dot/(Math.sqrt(aa*bb)+1e-8);
+}
+function classifyVector(v){
+  let best=null;
+  for(const t of TOKENS){
+    for(const tpl of (samples[t]||[])){
+      const d=cosineDist(v,tpl);
+      if(!best||d<best.d)best={t,d};
+    }
+  }
+  return best;
+}
+function smoothEnergy(x,win=320,hop=160){
+  x=resample16k(x,audioCtx.sampleRate);
+  const e=[];
+  for(let s=0;s+win<=x.length;s+=hop){
+    let q=0;for(let i=s;i<s+win;i++)q+=x[i]*x[i];
+    e.push(Math.sqrt(q/win));
+  }
+  return {x,e,hop};
+}
+function segmentByCount(raw,k){
+  const {x,e,hop}=smoothEnergy(trim(raw));
+  if(k===1)return [x];
+  const bounds=[0];
+  for(let j=1;j<k;j++){
+    const ideal=Math.round(e.length*j/k),rad=Math.max(2,Math.round(e.length/(k*3)));
+    let bi=ideal,bv=Infinity;
+    for(let i=Math.max(2,ideal-rad);i<=Math.min(e.length-3,ideal+rad);i++){
+      const v=(e[i-1]+e[i]+e[i+1])/3;
+      if(v<bv){bv=v;bi=i}
+    }
+    bounds.push(bi*hop);
+  }
+  bounds.push(x.length);
+  const segs=[];
+  for(let i=0;i<k;i++){
+    const a=Math.max(0,bounds[i]-320),b=Math.min(x.length,bounds[i+1]+320);
+    segs.push(x.slice(a,b));
+  }
+  return segs;
+}
+function parseChineseTokens(ts){
+  const d={'零':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+  const u={'十':10,'百':100,'千':1000};
+  if(!ts.length)return NaN;
+  if(!ts.some(t=>u[t])){
+    const a=ts.filter(t=>d[t]!==undefined).map(t=>d[t]);
+    return a.length?Number(a.join('')):NaN;
+  }
+  let total=0,cur=null,lastUnit=10000;
+  for(const t of ts){
+    if(d[t]!==undefined){cur=d[t];continue}
+    if(u[t]){
+      if(u[t]>=lastUnit)return NaN;
+      total+=(cur===null||cur===0?1:cur)*u[t];cur=null;lastUnit=u[t];
+    }
+  }
+  if(cur!==null)total+=cur;
+  return total;
+}
+function decodeUtterance(raw){
+  let best=null;
+  for(let k=1;k<=5;k++){
+    const segs=segmentByCount(raw,k);
+    const toks=[],ds=[];
+    let valid=true;
+    for(const seg of segs){
+      const v=fixedVector(seg);
+      if(!v){valid=false;break}
+      const c=classifyVector(v);
+      if(!c){valid=false;break}
+      toks.push(c.t);ds.push(c.d);
+    }
+    if(!valid)continue;
+    const n=parseChineseTokens(toks);
+    if(!Number.isFinite(n))continue;
+    const avg=ds.reduce((a,b)=>a+b,0)/ds.length;
+    // prefer solutions with clearer template matches and fewer unnecessary syllables
+    const score=avg + Math.max(0,k-4)*.015;
+    if(!best||score<best.score)best={tokens:toks,n,score,ds};
+  }
+  return best;
+}
+async function ensureMic(){
+  if(stream)return;
+  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended')await audioCtx.resume();
+  source=audioCtx.createMediaStreamSource(stream);
+  processor=audioCtx.createScriptProcessor(1024,1,1);
+  source.connect(processor);processor.connect(audioCtx.destination);
+
+  processor.onaudioprocess=e=>{
+    const ch=new Float32Array(e.inputBuffer.getChannelData(0)),r=rms(ch),ms=ch.length/audioCtx.sampleRate*1000;
+    $('#meter').style.width=Math.min(100,r*500)+'%';
+
+    if(mode==='idle')return;
+
+    if(!calibratedMic){
+      noiseFloor=noiseFloor*.98+r*.02;
+      gate=Math.max(.009,noiseFloor*2.8);
+    }
+
+    preRoll.push(ch);
+    if(preRoll.length>8)preRoll.shift();
+
+    if(waiting){
+      if(r>gate){
+        recording=true;waiting=false;silenceMs=0;voiceMs=0;
+        recChunks=preRoll.slice();
+        cap('🎙️ 聽到了，繼續說…','listen');
+      }
+      return;
+    }
+
+    if(recording){
+      recChunks.push(ch);
+      if(r>gate*.75){silenceMs=0;voiceMs+=ms}
+      else silenceMs+=ms;
+
+      const totalMs=recChunks.reduce((a,c)=>a+c.length,0)/audioCtx.sampleRate*1000;
+      if((voiceMs>120&&silenceMs>430)||totalMs>2600){
+        recording=false;waiting=true;
+        const raw=concatChunks(recChunks);recChunks=[];preRoll=[];
+        handleUtterance(raw);
+      }
+    }
+  };
+}
+function nextCalibration(){
+  if(tokenIndex>=TOKENS.length){
+    mode='idle';save();renderTokens();updateButtons();
+    $('#prompt').textContent='✓';
+    $('#instruction').textContent='校準完成';
+    cap('可以開始辨識測試','ok');
+    state('13 個聲音校準完成','ok');
+    calibratedMic=true;
+    return;
+  }
+  const t=TOKENS[tokenIndex];
+  $('#prompt').textContent=t;
+  $('#instruction').textContent=`請只說「${t}」`;
+  cap(`第 ${sampleIndex+1}/3 次，直接說`, 'listen');
+  $('#progressBar').style.width=((tokenIndex*3+sampleIndex)/(TOKENS.length*3)*100)+'%';
+  renderTokens();resetCapture();
+}
+function handleUtterance(raw){
+  if(mode==='calibrate'){
+    const v=fixedVector(raw);
+    if(!v){cap('太短，請再說一次','bad');resetCapture();return}
+    const t=TOKENS[tokenIndex];
+    samples[t]=samples[t]||[];
+    samples[t].push(v);
+    if(samples[t].length>3)samples[t]=samples[t].slice(-3);
+    log(`已收錄 ${t} 第 ${sampleIndex+1}/3 次`);
+    sampleIndex++;
+    if(sampleIndex>=3){sampleIndex=0;tokenIndex++}
+    save();
+    setTimeout(nextCalibration,450);
+    return;
+  }
+
+  if(mode==='test'){
+    cap('分析中…');
+    setTimeout(()=>{
+      const out=decodeUtterance(raw);
+      const want=TESTS[testIndex];
+      attempts++;
+      const box=$('#test'+testIndex);
+      if(out){
+        const ok=out.n===want;
+        if(ok)pass++;
+        box.classList.add(ok?'pass':'fail');
+        $('#result').className='result '+(ok?'ok':'bad');
+        $('#result').textContent=out.n;
+        $('#detail').textContent=`聽成：${out.tokens.join('')}｜距離 ${out.score.toFixed(3)}｜目標 ${want}`;
+        log(`目標 ${want} → ${out.tokens.join('')} = ${out.n}｜${ok?'PASS':'FAIL'}｜${out.score.toFixed(3)}`);
+      }else{
+        box.classList.add('fail');
+        $('#result').className='result bad';$('#result').textContent='無法辨識';
+        $('#detail').textContent=`目標 ${want}`;
+        log(`目標 ${want} → 無法辨識`);
+      }
+      testIndex++;
+      if(testIndex>=TESTS.length){
+        mode='idle';updateButtons();
+        state(`測試完成：${pass}/${attempts}`,pass>=7?'ok':'bad');
+        $('#prompt').textContent='完成';
+        cap('');
+      }else{
+        setTimeout(nextTest,700);
+      }
+    },30);
+  }
+}
+function nextTest(){
+  const n=TESTS[testIndex];
+  $('#prompt').textContent=numberToZh(n);
+  $('#instruction').textContent=`請直接說「${numberToZh(n)}」`;
+  cap('🎧 正在聽…','listen');
+  resetCapture();
+}
+function numberToZh(n){
+  const d=['零','一','二','三','四','五','六','七','八','九'];
+  if(n<10)return d[n];
+  if(n<20)return '十'+(n%10?d[n%10]:'');
+  if(n<100)return d[Math.floor(n/10)]+'十'+(n%10?d[n%10]:'');
+  if(n<1000){
+    const h=Math.floor(n/100),r=n%100;
+    let s=d[h]+'百';
+    if(!r)return s;
+    if(r<10)return s+'零'+d[r];
+    if(r<20)return s+'一十'+(r%10?d[r%10]:'');
+    return s+d[Math.floor(r/10)]+'十'+(r%10?d[r%10]:'');
+  }
+  return String(n);
+}
+async function startCal(){
+  try{await ensureMic()}catch(e){state('請允許麥克風','bad');return}
+  samples={};save();mode='calibrate';tokenIndex=0;sampleIndex=0;calibratedMic=true;
+  $('#calibrate').disabled=true;$('#testBtn').disabled=true;
+  state('語音校準中','listen');nextCalibration();
+}
+async function startTest(){
+  try{await ensureMic()}catch(e){state('請允許麥克風','bad');return}
+  if(!ready())return;
+  mode='test';testIndex=0;pass=0;attempts=0;renderTests();
+  $('#calibrate').disabled=true;$('#testBtn').disabled=true;
+  state('辨識測試中','listen');nextTest();
+}
+function clearAll(){
+  mode='idle';samples={};localStorage.removeItem(STORE);
+  tokenIndex=sampleIndex=testIndex=pass=attempts=0;
+  renderTokens();renderTests();updateButtons();
+  $('#prompt').textContent='—';$('#instruction').textContent='先按「開始語音校準」';
+  $('#result').textContent='—';$('#detail').textContent='';$('#progressBar').style.width='0%';
+  state('校準已清除');cap('');
+}
+$('#calibrate').onclick=startCal;
+$('#testBtn').onclick=startTest;
+$('#clearBtn').onclick=clearAll;
+renderTests();load();
+if(ready()){state('已有校準資料，可以直接測試','ok');$('#instruction').textContent='可直接按「開始辨識測試」'}
+})();
+</script>
+</body>
+</html>
