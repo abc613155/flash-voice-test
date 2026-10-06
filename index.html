@@ -1,83 +1,24 @@
-<!doctype html>
-<html lang="zh-Hant">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>中文數字語音訓練器</title>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.5.4/dist/speech-commands.min.js"></script>
-<style>
-*{box-sizing:border-box}body{margin:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;color:#111827}
-main{max-width:650px;margin:auto;padding:18px}.card{background:#fff;border:1px solid #dde2ea;border-radius:18px;padding:18px;margin:12px 0}
-h1{font-size:25px;margin:0 0 8px}.muted{color:#667085;line-height:1.6}.word{text-align:center;font-size:76px;font-weight:900;margin:20px 0}
-button{width:100%;min-height:54px;border:0;border-radius:13px;font-size:18px;font-weight:800;margin-top:10px;background:#2563eb;color:#fff}
-button.secondary{background:#475467}button:disabled{opacity:.45}.status{text-align:center;font-weight:800;margin:10px}.progress{height:12px;background:#e5e7eb;border-radius:9px;overflow:hidden}.bar{height:100%;width:0;background:#2563eb}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.small{font-size:13px}
-</style></head><body><main>
-<h1>中文數字語音訓練器</h1>
-<div class="muted">只需做一次。每個基本詞錄 8 次，每次按住按鈕後清楚說出畫面上的字。</div>
-<div class="card">
- <div class="progress"><div id="bar" class="bar"></div></div>
- <div id="count" class="status">準備中…</div>
- <div id="word" class="word">—</div>
- <button id="rec" disabled>🎙 按一下錄這個詞</button>
- <div id="msg" class="status"></div>
-</div>
-<div class="card">
- <div class="grid"><button id="train" disabled>開始訓練模型</button><button id="test" class="secondary" disabled>測試辨識</button></div>
- <div id="trainMsg" class="status"></div>
- <button id="save" disabled>下載訓練資料</button>
-</div>
-<div class="muted small">詞彙：零、一、二、三、四、五、六、七、八、九、十、百、負、背景。訓練資料會留在目前瀏覽器；「下載訓練資料」可另存備份。</div>
-</main>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>一年級 901｜閃算訓練</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f5f6f8;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#171717}.app{max-width:760px;margin:auto;padding:16px}.card{background:#fff;border:1px solid #d8dce3;border-radius:13px;padding:15px;margin-top:12px}.top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.title{font-size:23px;font-weight:900}.sub,.hint{color:#6b7280;font-size:14px}.stats{display:flex;gap:8px}.pill{background:#fff;border:1px solid #d8dce3;border-radius:12px;padding:8px 11px}.settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{font-weight:700;font-size:14px;display:block;margin-bottom:5px}select,input{width:100%;min-height:46px;border:1px solid #d8dce3;border-radius:10px;padding:8px;font-size:17px}.stage{text-align:center;min-height:280px;display:flex;flex-direction:column;justify-content:center;align-items:center}.status{align-self:stretch;display:flex;justify-content:space-between;color:#6b7280}.flash{font-size:clamp(80px,20vw,150px);font-weight:900;min-height:160px;display:flex;align-items:center}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}button{min-height:46px;border:1px solid #d8dce3;border-radius:10px;background:#fff;padding:8px 13px;font-weight:800;font-size:15px}button.primary{background:#2563eb;color:white;border-color:#2563eb}button:disabled{opacity:.45}.answer{display:none}.answer.show{display:block}.answerrow{display:flex;gap:8px;align-items:center}.answerrow input{flex:1}.mic{white-space:nowrap;padding:12px;border:1px solid #d8dce3;border-radius:10px;font-weight:800;cursor:pointer}.listening{animation:p .7s infinite alternate}@keyframes p{to{transform:scale(1.06)}}.feedback{font-weight:800;margin-top:9px;min-height:24px}.ok{color:#15803d}.bad{color:#b91c1c}.result{display:none;text-align:center}.result.show{display:block}.score{font-size:42px;font-weight:900}body.practice .settings{display:none}@media(max-width:600px){.settings{grid-template-columns:1fr}.top{display:block}.stats{margin-top:8px}.pill{flex:1;text-align:center}.actions{display:grid;grid-template-columns:1fr 1fr 1fr}.answerrow{display:grid;grid-template-columns:1fr auto}.stage{min-height:220px}}</style></head>
+<body><main class="app"><header class="top"><div><div class="sub">一年級組 901｜閃算訓練</div><div class="title" id="modeTitle"></div><div class="actions"><button class="primary" id="start">▶ 開始閃算</button><button id="repeat" disabled>↻ 重播本題</button><button id="reset">重新設定</button></div></div><div class="stats"><div class="pill">第 <b id="qno">1</b>/<b id="qtotal">15</b> 題</div><div class="pill">正確 <b id="correct">0</b></div></div></header>
+<section class="card settings"><div><label>訓練級別</label><select id="level"><option value="10a">十級｜一位數 4口</option><option value="10b">十級｜一位／二位數 3口</option><option value="9a">九級｜一位數 5口</option><option value="9b">九級｜一位／二位數 4口</option></select></div><div><label>每口顯示時間：<b id="speedText">0.8 秒</b></label><input id="speed" type="range" min=".1" max="1" step=".1" value=".8"></div><div><label>題數</label><select id="questions"><option value="15">15題｜正式訓練</option><option value="30">30題｜同分加賽</option><option value="10">10題｜快速練習</option></select></div><div><label>數字間隔</label><select id="gap"><option value="0">連續閃現</option><option value="100">0.1秒</option><option value="200">0.2秒</option></select></div></section>
+<section class="card stage"><div class="status"><span id="status">準備開始</span><span>第 <b id="mouth">0</b>/<b id="mouthTotal">4</b> 口</span></div><div class="flash" id="flashNumber">READY</div><div class="hint">閃完後輸入答案，或點 🎤 直接說答案</div></section>
+<section class="card answer" id="answerPanel"><label>答案</label><div class="answerrow"><input id="answer" inputmode="numeric" placeholder="37／三十七／參拾柒"><span class="mic" id="mic">🎤 說答案</span><button class="primary" id="submit">確定</button></div><div class="feedback" id="feedback"></div></section>
+<section class="card result" id="resultPanel"><div>本次成績</div><div class="score"><span id="finalScore">0</span> / <span id="finalTotal">15</span></div><div id="accuracy"></div></section></main>
 <script>
-const WORDS=['零','一','二','三','四','五','六','七','八','九','十','百','負','背景'], EACH=8;
-let r, wi=0, rep=0, busy=false;
-const $=s=>document.querySelector(s);
-async function init(){
- try{
-  $('#msg').textContent='載入輕量語音底模…';
-  const base=speechCommands.create('BROWSER_FFT');
-  await base.ensureModelLoaded();
-  r=base.createTransfer('zh-num-'+Date.now());
- }catch(err){$('#msg').textContent='載入失敗：'+err.message;return}
- $('#rec').disabled=false; render();
-}
-function render(){
- $('#word').textContent=WORDS[wi]||'完成';
- $('#count').textContent=wi<WORDS.length?`${WORDS[wi]}：第 ${rep+1} / ${EACH} 次`:'錄音完成，可以訓練';
- const done=wi*EACH+rep, total=WORDS.length*EACH;
- $('#bar').style.width=(done/total*100)+'%';
- if(wi>=WORDS.length){$('#rec').disabled=true;$('#train').disabled=false}
-}
-$('#rec').onclick=async()=>{
- if(busy||wi>=WORDS.length)return;busy=true;$('#rec').disabled=true;$('#msg').textContent='🎙 請說「'+WORDS[wi]+'」';
- try{
-  await r.collectExample(WORDS[wi]);
-  rep++; if(rep>=EACH){rep=0;wi++}
-  $('#msg').textContent='✓ 收到'; render();
- }catch(e){$('#msg').textContent='錄音錯誤：'+e.message}
- busy=false;if(wi<WORDS.length)$('#rec').disabled=false;
-};
-$('#train').onclick=async()=>{
- $('#train').disabled=true;$('#trainMsg').textContent='訓練中…';
- try{
-  await r.train({epochs:35,callback:{onEpochEnd:async(e,logs)=>{$('#trainMsg').textContent=`訓練 ${e+1}/35｜accuracy ${(logs.acc*100||0).toFixed(0)}%`}}});
-  $('#trainMsg').textContent='✓ 模型訓練完成';$('#test').disabled=false;$('#save').disabled=false;
- }catch(e){$('#trainMsg').textContent='訓練失敗：'+e.message;$('#train').disabled=false}
-};
-$('#test').onclick=async()=>{
- $('#trainMsg').textContent='🎙 說一個已訓練的基本詞…';
- await r.listen(res=>{
-  const labels=r.wordLabels();let k=0;for(let i=1;i<res.scores.length;i++)if(res.scores[i]>res.scores[k])k=i;
-  $('#trainMsg').textContent=`聽到：${labels[k]}｜信心 ${(res.scores[k]*100).toFixed(0)}%`;
-  r.stopListening();
- },{probabilityThreshold:0.65,overlapFactor:0.25,invokeCallbackOnNoiseAndUnknown:false});
-};
-$('#save').onclick=async()=>{
- try{await r.serializeExamples().then(buf=>{
-  const blob=new Blob([buf],{type:'application/octet-stream'}),a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download='中文數字訓練資料.bin';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
- });}catch(e){$('#trainMsg').textContent='下載失敗：'+e.message}
-};
-init();
+(()=>{const $=s=>document.querySelector(s);let terms=[],target=0,q=1,correct=0,busy=false,timers=[];
+function cfg(){let v=$('#level').value,m={10a:['十級心算｜一位數 4 口',4,0],10b:['十級心算｜一位／二位數 3 口',3,1],9a:['九級心算｜一位數 5 口',5,0],9b:['九級心算｜一位／二位數 4 口',4,1]}[v];return{name:m[0],mouths:m[1],mixed:m[2],total:+$('#questions').value,speed:+$('#speed').value*1000,gap:+$('#gap').value}}
+function later(f,t){timers.push(setTimeout(f,t))}function clear(){timers.forEach(clearTimeout);timers=[];busy=false}
+function gen(){let c=cfg(),a=[],s=0;for(let i=0;i<c.mouths;i++){let max=c.mixed?99:9,min=c.mixed&&Math.random()<.65?10:1,n=min+Math.floor(Math.random()*(max-min+1));if(i&&Math.random()<.32&&s-n>=0)n=-n;s+=n;a.push(n)}terms=a;target=s;$('#mouthTotal').textContent=c.mouths}
+function head(){let c=cfg();$('#modeTitle').textContent=c.name;$('#qno').textContent=q;$('#qtotal').textContent=c.total;$('#correct').textContent=correct}
+function num(raw){let x=(raw||'').trim().replace(/[，。,.！!？?、\s]/g,'').replace(/^(答案是|答案為|答案|等於|是)/,'');if(/^-?\d+$/.test(x))return +x;let neg=/^(負|负)/.test(x);x=x.replace(/^(負|负)/,'').replace(/拾/g,'十').replace(/佰/g,'百');let d={'零':0,'〇':0,'○':0,'一':1,'壹':1,'二':2,'兩':2,'两':2,'貳':2,'贰':2,'三':3,'參':3,'叁':3,'四':4,'肆':4,'五':5,'伍':5,'六':6,'陸':6,'陆':6,'七':7,'柒':7,'八':8,'捌':8,'九':9,'玖':9},n=0,seen=0;if(x.includes('百')){let [a,r]=x.split('百');if(a&&d[a]===undefined)return NaN;n+=(a?d[a]:1)*100;x=r||'';seen=1}if(x.includes('十')){let [a,b]=x.split('十');if(a&&d[a]===undefined)return NaN;n+=(a?d[a]:1)*10;if(b){if(d[b]===undefined)return NaN;n+=d[b]}seen=1}else if(x){if(x.length===1&&d[x]!==undefined){n+=d[x];seen=1}else{let z=[...x].map(c=>d[c]);if(z.some(v=>v===undefined))return NaN;n=+z.join('');seen=1}}return seen?(neg?-n:n):NaN}
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec;
+function mic(t,on=0){$('#mic').textContent=t;$('#mic').classList.toggle('listening',!!on)}
+if(SR){rec=new SR();rec.lang='zh-TW';rec.continuous=false;rec.interimResults=false;rec.maxAlternatives=5;rec.onstart=()=>mic('🔴 請說答案',1);rec.onresult=e=>{let v=NaN;for(let i=0;i<e.results[0].length;i++){v=num(e.results[0][i].transcript);if(!Number.isNaN(v))break}if(!Number.isNaN(v)){$('#answer').value=v;mic('✓ '+v);setTimeout(submit,100)}else mic('再按一次 🎤')};rec.onerror=e=>mic(e.error==='not-allowed'?'請允許麥克風':'再按一次 🎤');rec.onend=()=>$('#mic').classList.remove('listening');$('#mic').onclick=()=>{try{rec.start()}catch(e){}}}else mic('瀏覽器不支援');
+function flash(){if(busy)return;clear();busy=true;$('#answerPanel').classList.remove('show');$('#feedback').textContent='';$('#repeat').disabled=true;$('#start').disabled=true;$('#flashNumber').textContent='3';$('#status').textContent='準備';$('#mouth').textContent='0';let c=cfg(),cur=1800,blank=Math.max(55,c.gap);later(()=>$('#flashNumber').textContent='2',450);later(()=>$('#flashNumber').textContent='1',900);later(()=>$('#flashNumber').textContent='●',1350);terms.forEach((n,i)=>{later(()=>$('#flashNumber').textContent='',cur);cur+=blank;later(()=>{$('#status').textContent='閃算中';$('#mouth').textContent=i+1;$('#flashNumber').textContent=(n<0?'−':'')+Math.abs(n)},cur);cur+=c.speed});later(()=>{$('#flashNumber').textContent='？';$('#status').textContent='請作答';$('#answerPanel').classList.add('show');$('#answer').value='';$('#repeat').disabled=false;$('#start').disabled=false;busy=false},cur+80)}
+function submit(){let v=num($('#answer').value);if(Number.isNaN(v))return;if(v===target){correct++;$('#correct').textContent=correct;$('#feedback').className='feedback ok';$('#feedback').textContent='✓ 正確'}else{$('#feedback').className='feedback bad';$('#feedback').textContent='✗ 答案：'+target+'　題目：'+terms.map((x,i)=>(x>0&&i?'+':'')+x).join(' ')}$('#submit').disabled=true;later(()=>{$('#submit').disabled=false;next()},900)}
+function next(){let c=cfg();if(q>=c.total)return finish();q++;gen();head();$('#answerPanel').classList.remove('show');later(flash,450)}
+function finish(){clear();let c=cfg();$('#answerPanel').classList.remove('show');$('#resultPanel').classList.add('show');$('#flashNumber').textContent='完成';$('#status').textContent='訓練完成';$('#finalScore').textContent=correct;$('#finalTotal').textContent=c.total;$('#accuracy').textContent='正確率 '+Math.round(correct/c.total*100)+'%'}
+function reset(){clear();q=1;correct=0;gen();head();document.body.classList.remove('practice');$('#resultPanel').classList.remove('show');$('#answerPanel').classList.remove('show');$('#flashNumber').textContent='READY';$('#status').textContent='準備開始';$('#mouth').textContent='0';$('#repeat').disabled=true;$('#start').disabled=false}
+$('#start').onclick=()=>{document.body.classList.add('practice');gen();flash()};$('#repeat').onclick=flash;$('#reset').onclick=reset;$('#submit').onclick=submit;$('#answer').onkeydown=e=>{if(e.key==='Enter')submit()};$('#speed').oninput=()=>$('#speedText').textContent=(+$('#speed').value).toFixed(1)+' 秒';$('#level').onchange=reset;$('#questions').onchange=reset;reset()})();
 </script></body></html>
