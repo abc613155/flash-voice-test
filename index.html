@@ -42,7 +42,7 @@ body.practice .settings{display:none}
     <div class="title" id="modeTitle"></div>
     <div class="actions">
       <button type="button" class="primary" id="start" disabled>準備語音中…</button>
-      <span id="buildTag" style="font-size:11px;color:#6b7280">v13.1</span>
+      <span id="buildTag" style="font-size:11px;color:#6b7280">v13.2</span>
       <button type="button" id="repeat" disabled>↻ 重播本題</button>
       <button type="button" id="reset">重新設定</button>
     </div>
@@ -231,49 +231,54 @@ import { initKWSModule, createKeywordSpotter } from "https://cdn.jsdelivr.net/np
 
 const MODEL="https://huggingface.co/moeru-ai/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/resolve/main/install/bin/wasm/";
 let moduleKws=null,spotter=null,stream=null,audioCtx=null,source=null,processor=null;
-let listening=false,processing=false,speechSeen=false,silenceMs=0,lastLoudAt=0;
+let listening=false,processing=false,speechSeen=false,silenceMs=0,heard=[];
 
-const py={
-  '零':['l','íng'],'一':['y','ī'],'二':['èr'],'兩':['l','iǎng'],
-  '三':['s','ān'],'四':['s','ì'],'五':['w','ǔ'],'六':['l','iù'],
-  '七':['q','ī'],'八':['b','ā'],'九':['j','iǔ'],
-  '十':['sh','í'],'百':['b','ǎi'],'千':['q','iān']
-};
+// v13.2: Do NOT register 0~400 as full-number keywords.
+// "十" is a prefix of "十二", "十三"... and used to fire too early.
+// We only listen for the 14 building blocks, then assemble the answer after silence.
+const keywords=[
+  {label:'零',matches:[{tokens:['l','íng'],threshold:.18}],score:1.8},
+  {label:'一',matches:[{tokens:['y','ī'],threshold:.18},{tokens:['y','í'],threshold:.18},{tokens:['y','ì'],threshold:.18}],score:1.8},
+  {label:'二',matches:[{tokens:['èr'],threshold:.16}],score:2.0},
+  {label:'兩',matches:[{tokens:['l','iǎng'],threshold:.18}],score:1.8},
+  {label:'三',matches:[{tokens:['s','ān'],threshold:.18}],score:1.8},
+  {label:'四',matches:[{tokens:['s','ì'],threshold:.18}],score:1.8},
+  {label:'五',matches:[{tokens:['w','ǔ'],threshold:.18}],score:1.8},
+  {label:'六',matches:[{tokens:['l','iù'],threshold:.18}],score:1.8},
+  {label:'七',matches:[{tokens:['q','ī'],threshold:.18}],score:1.8},
+  {label:'八',matches:[{tokens:['b','ā'],threshold:.18}],score:1.8},
+  {label:'九',matches:[{tokens:['j','iǔ'],threshold:.18}],score:1.8},
+  {label:'十',matches:[{tokens:['sh','í'],threshold:.16}],score:2.0},
+  {label:'百',matches:[{tokens:['b','ǎi'],threshold:.16}],score:2.0},
+  {label:'千',matches:[{tokens:['q','iān'],threshold:.16}],score:2.0}
+];
 
-function zhNumber(n,useLiang=false){
-  if(n===0)return '零';
-  const d=['零','一','二','三','四','五','六','七','八','九'];
-  if(n<10)return d[n];
-  if(n<20)return '十'+(n%10?d[n%10]:'');
-  if(n<100)return d[Math.floor(n/10)]+'十'+(n%10?d[n%10]:'');
-  if(n<1000){
-    let h=Math.floor(n/100),r=n%100;
-    let head=(useLiang&&h===2?'兩':d[h])+'百';
-    if(!r)return head;
-    if(r<10)return head+'零'+d[r];
-    if(r<20)return head+'一十'+(r%10?d[r%10]:'');
-    return head+d[Math.floor(r/10)]+'十'+(r%10?d[r%10]:'');
+const digit={'零':0,'一':1,'二':2,'兩':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+const unit={'十':10,'百':100,'千':1000};
+
+function parseChineseParts(parts){
+  if(!parts.length)return NaN;
+  const hasUnit=parts.some(x=>unit[x]);
+  if(!hasUnit){
+    const nums=parts.filter(x=>digit[x]!==undefined).map(x=>digit[x]);
+    if(!nums.length)return NaN;
+    return nums.length===1?nums[0]:Number(nums.join(''));
   }
-  let th=Math.floor(n/1000),r=n%1000;
-  let head=(useLiang&&th===2?'兩':d[th])+'千';
-  if(!r)return head;
-  if(r<100)head+='零';
-  return head+zhNumber(r,useLiang);
+  let total=0,cur=null;
+  for(const x of parts){
+    if(digit[x]!==undefined){
+      if(x==='零'){ if(cur===null)cur=0; }
+      else cur=digit[x];
+      continue;
+    }
+    if(unit[x]){
+      total+=(cur===null||cur===0?1:cur)*unit[x];
+      cur=null;
+    }
+  }
+  if(cur!==null)total+=cur;
+  return total;
 }
-function toTokens(text){
-  return [...text].flatMap(ch=>py[ch]||[]);
-}
-function variantsFor(n){
-  const out=[zhNumber(n,false)];
-  if(n>=200&&n<300)out.push(zhNumber(n,true));
-  // Taiwan children may naturally say 一百十X instead of 一百一十X.
-  if(n>=110&&n<120)out.push('一百十'+(n%10?zhNumber(n%10):''));
-  return [...new Set(out)].map(t=>({tokens:toTokens(t),threshold:.25,score:1.5}));
-}
-const numberKeywords=Array.from({length:401},(_,n)=>({
-  label:String(n),matches:variantsFor(n),threshold:.25,score:1.5
-}));
-
 function rms(a){
   let sum=0;for(let i=0;i<a.length;i++)sum+=a[i]*a[i];
   return Math.sqrt(sum/a.length);
@@ -285,12 +290,6 @@ function mountPack(mod,data,meta){
     try{if(mod.FS.analyzePath('/'+name).exists)mod.FS.unlink('/'+name)}catch(e){}
     mod.FS_createDataFile('/',name,bytes.subarray(f.start,f.end),true,true,true);
   }
-}
-function restartListening(message){
-  if(!listening)return;
-  speechSeen=false;silenceMs=0;lastLoudAt=0;
-  try{spotter.reset()}catch(e){}
-  window.voiceRetry(message||'沒聽清楚，再說一次');
 }
 async function loadVoice(){
   try{
@@ -304,7 +303,7 @@ async function loadVoice(){
     mountPack(moduleKws,data,meta);
     spotter=createKeywordSpotter(moduleKws,{
       model:{encoder:'encoder.onnx',decoder:'decoder.onnx',joiner:'joiner.onnx',tokens:'tokens.txt'},
-      keywords:numberKeywords,maxActivePaths:8
+      keywords,maxActivePaths:8
     });
     window.voiceEngineReady();
   }catch(e){
@@ -312,6 +311,24 @@ async function loadVoice(){
     window.voiceEngineError('本機數字語音載入失敗，請重新整理頁面');
   }
 }
+
+function resetUtterance(msg){
+  heard=[];speechSeen=false;silenceMs=0;
+  try{spotter.reset()}catch(e){}
+  if(msg)window.voiceRetry(msg);
+}
+function finishUtterance(){
+  if(!listening)return;
+  const parts=[...heard];
+  const n=parseChineseParts(parts);
+  if(Number.isFinite(n)){
+    listening=false;
+    window.voiceHeardNumber(n,'聽到 '+parts.join(''));
+  }else{
+    resetUtterance('沒聽清楚，請再說一次');
+  }
+}
+
 window.prepareVoiceMic=async()=>{
   if(audioCtx&&stream)return;
   stream=await navigator.mediaDevices.getUserMedia({
@@ -322,13 +339,16 @@ window.prepareVoiceMic=async()=>{
   source=audioCtx.createMediaStreamSource(stream);
   processor=audioCtx.createScriptProcessor(2048,1,1);
   source.connect(processor);processor.connect(audioCtx.destination);
+
   processor.onaudioprocess=e=>{
     if(!listening||!spotter||processing)return;
     const chunk=new Float32Array(e.inputBuffer.getChannelData(0));
     const level=rms(chunk);
     const chunkMs=chunk.length/audioCtx.sampleRate*1000;
-    if(level>.014){
-      speechSeen=true;silenceMs=0;lastLoudAt=performance.now();
+
+    if(level>.012){
+      speechSeen=true;
+      silenceMs=0;
     }else if(speechSeen){
       silenceMs+=chunkMs;
     }
@@ -336,30 +356,33 @@ window.prepareVoiceMic=async()=>{
     processing=true;
     try{
       const hits=spotter.processAudio(chunk,audioCtx.sampleRate);
-      if(hits.length){
-        const n=Number(hits[0].label);
-        if(Number.isFinite(n)){
-          listening=false;
-          window.voiceHeardNumber(n,'聽到 '+n);
-          return;
+      for(const h of hits){
+        const last=heard[heard.length-1];
+        // Sherpa resets after a hit; suppress only an immediate duplicate caused by one syllable.
+        if(last!==h.label || silenceMs>120){
+          heard.push(h.label);
+          window.voiceRetry('聽到：'+heard.join('')+'…');
         }
+        speechSeen=true;
+        silenceMs=0;
       }
     }catch(err){console.error(err)}
     finally{processing=false}
 
-    // Heard a voice but no complete number matched: reset after a short pause.
-    if(listening&&speechSeen&&silenceMs>850){
-      restartListening('沒聽清楚，請再說一次');
+    // Wait long enough for the second syllable in "十二" etc.
+    if(listening && speechSeen && silenceMs>950){
+      finishUtterance();
     }
   };
 };
+
 window.beginVoiceAnswer=()=>{
   if(!spotter)return;
-  speechSeen=false;silenceMs=0;lastLoudAt=0;listening=true;
-  try{spotter.reset()}catch(e){}
+  listening=true;
+  resetUtterance();
 };
 window.cancelVoiceAnswer=()=>{
-  listening=false;speechSeen=false;silenceMs=0;lastLoudAt=0;
+  listening=false;heard=[];speechSeen=false;silenceMs=0;
 };
 loadVoice();
 </script>
