@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>閃算語音測試</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;color:#171717}
+main{max-width:560px;margin:auto;padding:22px}
+.card{background:#fff;border:1px solid #d9dee7;border-radius:20px;padding:22px;margin-top:16px}
+h1{font-size:27px;margin:4px 0}.sub{color:#667085}
+button{width:100%;min-height:58px;border:0;border-radius:14px;font-size:20px;font-weight:800;background:#2563eb;color:#fff;margin-top:14px}
+.state{text-align:center;font-size:21px;font-weight:800;margin:22px 0 10px}
+.heard{text-align:center;font-size:64px;font-weight:900;min-height:90px}
+.raw{text-align:center;color:#667085;min-height:30px}
+.ok{color:#15803d}.bad{color:#b91c1c}
+.note{font-size:14px;line-height:1.7;color:#667085}
+</style>
+</head>
+<body>
+<main>
+<h1>閃算｜語音辨識測試</h1>
+<div class="sub">先只測一件事：說「13」，畫面必須顯示 13。</div>
+<section class="card">
+  <div id="state" class="state">尚未開始</div>
+  <div id="heard" class="heard">—</div>
+  <div id="raw" class="raw"></div>
+  <button id="start">🎙 開始聽答案</button>
+</section>
+<section class="card note">
+請用 GitHub Pages 的 HTTPS 網址開啟本頁。第一次使用請允許麥克風。按一次「開始聽答案」後直接說「13」或「十三」。<br>
+如果成功，會顯示「13」；如果瀏覽器不支援，頁面會直接顯示原因。
+</section>
+</main>
+<script>
+const state=document.getElementById('state'), heard=document.getElementById('heard'), raw=document.getElementById('raw'), btn=document.getElementById('start');
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null;
+
+function parseNum(raw){
+ let x=(raw||'').trim().replace(/[，。,.！!？?、\s]/g,'').replace(/^(答案是|答案為|答案|等於|是)/,'');
+ let neg=/^(負|负)/.test(x); x=x.replace(/^(負|负)/,'');
+ if(/^\d+$/.test(x)) return (neg?'-':'')+String(parseInt(x,10));
+ const d={'零':0,'〇':0,'一':1,'二':2,'兩':2,'两':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+ let n=0;
+ if(x.includes('百')){let [a,r]=x.split('百');n+=(a?d[a]:1)*100;x=r||''}
+ if(x.includes('十')){let [a,b]=x.split('十');n+=(a?d[a]:1)*10;if(b)n+=d[b]??0}
+ else if(x){if(x.length===1&&d[x]!==undefined)n+=d[x];else{let ds=[...x].map(c=>d[c]);if(ds.some(v=>v===undefined))return '';n=parseInt(ds.join(''),10)}}
+ return (neg?'-':'')+String(n);
+}
+if(!SR){
+ state.textContent='此瀏覽器沒有 SpeechRecognition';
+ state.className='state bad'; btn.disabled=true; btn.style.opacity=.45;
+}else{
+ rec=new SR(); rec.lang='zh-TW'; rec.continuous=false; rec.interimResults=false; rec.maxAlternatives=5;
+ rec.onstart=()=>{state.textContent='🔴 正在聽，請說答案';state.className='state';heard.textContent='…';raw.textContent=''};
+ rec.onresult=e=>{
+   const text=e.results[0][0].transcript;
+   const n=parseNum(text);
+   raw.textContent='原始辨識：'+text;
+   if(n!==''){heard.textContent=n;state.textContent='✓ 辨識成功';state.className='state ok'}
+   else{heard.textContent='？';state.textContent='有聽到，但不是可辨識的數字';state.className='state bad'}
+ };
+ rec.onerror=e=>{heard.textContent='×';state.textContent='辨識錯誤：'+e.error;state.className='state bad';raw.textContent='請確認麥克風權限與 HTTPS 網址'};
+ rec.onend=()=>{btn.disabled=false};
+ btn.onclick=()=>{
+   btn.disabled=true;
+   try{rec.start()}catch(e){state.textContent='無法啟動：'+e.message;state.className='state bad';btn.disabled=false}
+ };
+}
+</script>
+</body></html>
