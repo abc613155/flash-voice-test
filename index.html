@@ -239,6 +239,66 @@ function acceptVoiceText(text, isFinal=false){
  }, isFinal ? 80 : 650);
 }
 
+
+async function getModelBlobWithProgress(){
+ const cacheName='flash901-vosk-cn-v1', url='model.tar.gz';
+ const wrap=document.getElementById('modelProgressWrap');
+ const bar=document.getElementById('modelProgressBar');
+ const txt=document.getElementById('modelProgressText');
+ wrap.style.display='block';
+
+ if('caches' in window){
+   const cache=await caches.open(cacheName);
+   const hit=await cache.match(url);
+   if(hit){
+     txt.textContent='已找到本機模型快取，準備初始化…';
+     bar.style.width='100%';
+     return await hit.blob();
+   }
+ }
+ const r=await fetch(url,{cache:'force-cache'});
+ if(!r.ok) throw new Error('模型下載失敗 HTTP '+r.status);
+ const total=Number(r.headers.get('content-length'))||0;
+ if(!r.body){
+   const b=await r.blob();
+   bar.style.width='100%'; txt.textContent='模型下載完成，準備初始化…';
+   return b;
+ }
+ const reader=r.body.getReader(), chunks=[]; let got=0;
+ while(true){
+   const {done,value}=await reader.read(); if(done)break;
+   chunks.push(value); got+=value.byteLength;
+   if(total){
+     const pct=Math.min(100,Math.round(got/total*100));
+     bar.style.width=pct+'%';
+     txt.textContent=`下載中文模型 ${pct}%（${(got/1048576).toFixed(1)} / ${(total/1048576).toFixed(1)} MB）`;
+   }else txt.textContent=`下載中文模型 ${(got/1048576).toFixed(1)} MB`;
+ }
+ const blob=new Blob(chunks,{type:'application/gzip'});
+ bar.style.width='100%'; txt.textContent='下載完成，正在初始化語音模型…';
+ if('caches' in window){
+   try{
+     const cache=await caches.open(cacheName);
+     await cache.put(url,new Response(blob,{headers:{'Content-Type':'application/gzip'}}));
+   }catch(e){console.warn('模型快取失敗',e)}
+ }
+ return blob;
+}
+function zhNum(n){
+ if(n===0)return '零';
+ const d=['零','一','二','三','四','五','六','七','八','九'];
+ let s='';
+ if(n>=100){s+=d[Math.floor(n/100)]+'百';n%=100;if(n>0&&n<10)s+='零'}
+ if(n>=10){const t=Math.floor(n/10);if(t>1||s)s+=d[t];s+='十';n%=10}
+ if(n>0)s+=d[n];
+ return s;
+}
+function numberGrammar(){
+ const a=['[unk]'];
+ for(let i=0;i<=500;i++){a.push(zhNum(i));a.push(String(i));}
+ for(let i=1;i<=200;i++){a.push('負'+zhNum(i));a.push('-'+i);}
+ return JSON.stringify([...new Set(a)]);
+}
 async function initVosk(){
  if(voiceReady)return true;
  if(voiceLoading){
@@ -248,9 +308,15 @@ async function initVosk(){
  voiceLoading=true;
  try{
    if(!window.Vosk) throw new Error('Vosk 程式庫載入失敗');
-   setMic('下載中文模型…');
-   $('#status').textContent='第一次使用：載入中文語音模型';
-   voskModel=await Vosk.createModel('model.tar.gz');
+   setMic('準備中文模型…');
+   $('#status').textContent='準備語音模型';
+   const modelBlob=await getModelBlobWithProgress();
+   const modelUrl=URL.createObjectURL(modelBlob);
+   setMic('初始化中文模型…');
+   $('#status').textContent='模型已下載，正在初始化 Vosk…';
+   voskModel=await Vosk.createModel(modelUrl);
+   URL.revokeObjectURL(modelUrl);
+   document.getElementById('modelProgressText').textContent='模型初始化完成';
 
    setMic('要求麥克風…');
    mediaStream=await navigator.mediaDevices.getUserMedia({
@@ -261,7 +327,7 @@ async function initVosk(){
    voiceAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
    if(voiceAudioCtx.state==='suspended') await voiceAudioCtx.resume();
 
-   recognizer=new voskModel.KaldiRecognizer(voiceAudioCtx.sampleRate);
+   recognizer=new voskModel.KaldiRecognizer(voiceAudioCtx.sampleRate, numberGrammar());
    recognizer.on("result",m=>acceptVoiceText(m.result.text,true));
    recognizer.on("partialresult",m=>acceptVoiceText(m.result.partial,false));
 
