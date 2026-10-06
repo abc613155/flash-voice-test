@@ -19,7 +19,7 @@ label{font-weight:700;font-size:14px;display:block;margin-bottom:5px}
 select,input{width:100%;min-height:46px;border:1px solid #d8dce3;border-radius:10px;padding:8px;font-size:17px}
 .stage{text-align:center;min-height:280px;display:flex;flex-direction:column;justify-content:center;align-items:center}
 .status{align-self:stretch;display:flex;justify-content:space-between;color:#6b7280}
-.flash{font-size:clamp(80px,20vw,150px);font-weight:900;min-height:160px;display:flex;align-items:center}
+.flash{font-size:clamp(80px,20vw,150px);font-weight:900;min-height:160px;display:flex;align-items:center}.flash.pop{animation:pop .12s ease-out}@keyframes pop{from{transform:scale(.9);opacity:.3}to{transform:scale(1);opacity:1}}
 .actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
 button{min-height:46px;border:1px solid #d8dce3;border-radius:10px;background:#fff;padding:8px 13px;font-weight:800;font-size:15px}
 button.primary{background:#2563eb;color:white;border-color:#2563eb}
@@ -42,7 +42,7 @@ body.practice .settings{display:none}
     <div class="title" id="modeTitle"></div>
     <div class="actions">
       <button type="button" class="primary" id="start" disabled>準備語音中…</button>
-      <span id="buildTag" style="font-size:11px;color:#6b7280">v13.0</span>
+      <span id="buildTag" style="font-size:11px;color:#6b7280">v13.1</span>
       <button type="button" id="repeat" disabled>↻ 重播本題</button>
       <button type="button" id="reset">重新設定</button>
     </div>
@@ -150,10 +150,13 @@ function flash(){
   voiceState('');
   const step=()=>{
     if(i>=terms.length){later(showAnswer,Math.max(120,c.gap));return}
-    $('#flashNumber').textContent=(terms[i]>0&&i>0?'+':'')+terms[i];
+    const box=$('#flashNumber');
+    box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop');
+    box.textContent=(terms[i]>0&&i>0?'+':'')+terms[i];
     $('#mouth').textContent=i+1;
     i++;
-    later(()=>{$('#flashNumber').textContent='';later(step,c.gap)},c.speed);
+    const blank=Math.max(90,c.gap);
+    later(()=>{box.textContent='';box.classList.remove('pop');later(step,blank)},c.speed);
   };
   step();
 }
@@ -228,57 +231,66 @@ import { initKWSModule, createKeywordSpotter } from "https://cdn.jsdelivr.net/np
 
 const MODEL="https://huggingface.co/moeru-ai/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/resolve/main/install/bin/wasm/";
 let moduleKws=null,spotter=null,stream=null,audioCtx=null,source=null,processor=null;
-let listening=false,heard=[],speechSeen=false,silenceMs=0,lastHitAt=0,processing=false;
+let listening=false,processing=false,speechSeen=false,silenceMs=0,lastLoudAt=0;
 
-const keywords=[
-  {label:'零',matches:[{tokens:['l','íng'],threshold:.22}]},
-  {label:'一',matches:[{tokens:['y','ī'],threshold:.22},{tokens:['y','í'],threshold:.22},{tokens:['y','ì'],threshold:.22}]},
-  {label:'二',matches:[{tokens:['èr'],threshold:.22}]},
-  {label:'兩',matches:[{tokens:['l','iǎng'],threshold:.22}]},
-  {label:'三',matches:[{tokens:['s','ān'],threshold:.22}]},
-  {label:'四',matches:[{tokens:['s','ì'],threshold:.22}]},
-  {label:'五',matches:[{tokens:['w','ǔ'],threshold:.22}]},
-  {label:'六',matches:[{tokens:['l','iù'],threshold:.22}]},
-  {label:'七',matches:[{tokens:['q','ī'],threshold:.22}]},
-  {label:'八',matches:[{tokens:['b','ā'],threshold:.22}]},
-  {label:'九',matches:[{tokens:['j','iǔ'],threshold:.22}]},
-  {label:'十',matches:[{tokens:['sh','í'],threshold:.20}]},
-  {label:'百',matches:[{tokens:['b','ǎi'],threshold:.20}]},
-  {label:'千',matches:[{tokens:['q','iān'],threshold:.20}]}
-];
+const py={
+  '零':['l','íng'],'一':['y','ī'],'二':['èr'],'兩':['l','iǎng'],
+  '三':['s','ān'],'四':['s','ì'],'五':['w','ǔ'],'六':['l','iù'],
+  '七':['q','ī'],'八':['b','ā'],'九':['j','iǔ'],
+  '十':['sh','í'],'百':['b','ǎi'],'千':['q','iān']
+};
 
-function parseNumberTokens(t){
-  if(!t.length)return NaN;
-  const d={'零':0,'一':1,'二':2,'兩':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
-  const units={'十':10,'百':100,'千':1000};
-  const hasUnit=t.some(x=>units[x]);
-  if(!hasUnit){
-    const vals=t.filter(x=>d[x]!==undefined).map(x=>d[x]);
-    if(!vals.length)return NaN;
-    return vals.length===1?vals[0]:Number(vals.join(''));
+function zhNumber(n,useLiang=false){
+  if(n===0)return '零';
+  const d=['零','一','二','三','四','五','六','七','八','九'];
+  if(n<10)return d[n];
+  if(n<20)return '十'+(n%10?d[n%10]:'');
+  if(n<100)return d[Math.floor(n/10)]+'十'+(n%10?d[n%10]:'');
+  if(n<1000){
+    let h=Math.floor(n/100),r=n%100;
+    let head=(useLiang&&h===2?'兩':d[h])+'百';
+    if(!r)return head;
+    if(r<10)return head+'零'+d[r];
+    if(r<20)return head+'一十'+(r%10?d[r%10]:'');
+    return head+d[Math.floor(r/10)]+'十'+(r%10?d[r%10]:'');
   }
-  let total=0,cur=null;
-  for(const x of t){
-    if(d[x]!==undefined){cur=d[x];continue}
-    if(units[x]){
-      const n=cur===null?1:cur;
-      total+=n*units[x];cur=null;
-    }
-  }
-  if(cur!==null)total+=cur;
-  return total;
+  let th=Math.floor(n/1000),r=n%1000;
+  let head=(useLiang&&th===2?'兩':d[th])+'千';
+  if(!r)return head;
+  if(r<100)head+='零';
+  return head+zhNumber(r,useLiang);
 }
+function toTokens(text){
+  return [...text].flatMap(ch=>py[ch]||[]);
+}
+function variantsFor(n){
+  const out=[zhNumber(n,false)];
+  if(n>=200&&n<300)out.push(zhNumber(n,true));
+  // Taiwan children may naturally say 一百十X instead of 一百一十X.
+  if(n>=110&&n<120)out.push('一百十'+(n%10?zhNumber(n%10):''));
+  return [...new Set(out)].map(t=>({tokens:toTokens(t),threshold:.25,score:1.5}));
+}
+const numberKeywords=Array.from({length:401},(_,n)=>({
+  label:String(n),matches:variantsFor(n),threshold:.25,score:1.5
+}));
+
 function rms(a){
-  let s=0;for(let i=0;i<a.length;i++)s+=a[i]*a[i];
-  return Math.sqrt(s/a.length);
+  let sum=0;for(let i=0;i<a.length;i++)sum+=a[i]*a[i];
+  return Math.sqrt(sum/a.length);
 }
 function mountPack(mod,data,meta){
   const bytes=new Uint8Array(data);
   for(const f of meta.files){
     const name=f.filename.startsWith('/')?f.filename.slice(1):f.filename;
-    try{ if(mod.FS.analyzePath('/'+name).exists) mod.FS.unlink('/'+name) }catch(e){}
+    try{if(mod.FS.analyzePath('/'+name).exists)mod.FS.unlink('/'+name)}catch(e){}
     mod.FS_createDataFile('/',name,bytes.subarray(f.start,f.end),true,true,true);
   }
+}
+function restartListening(message){
+  if(!listening)return;
+  speechSeen=false;silenceMs=0;lastLoudAt=0;
+  try{spotter.reset()}catch(e){}
+  window.voiceRetry(message||'沒聽清楚，再說一次');
 }
 async function loadVoice(){
   try{
@@ -286,13 +298,13 @@ async function loadVoice(){
       fetch(MODEL+'preload.data',{cache:'force-cache'}),
       fetch(MODEL+'preload.js.metadata',{cache:'force-cache'})
     ]);
-    if(!d.ok||!m.ok)throw new Error('模型載入失敗');
+    if(!d.ok||!m.ok)throw new Error('model');
     const [data,meta]=await Promise.all([d.arrayBuffer(),m.json()]);
     moduleKws=await initKWSModule();
     mountPack(moduleKws,data,meta);
     spotter=createKeywordSpotter(moduleKws,{
       model:{encoder:'encoder.onnx',decoder:'decoder.onnx',joiner:'joiner.onnx',tokens:'tokens.txt'},
-      keywords,maxActivePaths:4
+      keywords:numberKeywords,maxActivePaths:8
     });
     window.voiceEngineReady();
   }catch(e){
@@ -302,50 +314,53 @@ async function loadVoice(){
 }
 window.prepareVoiceMic=async()=>{
   if(audioCtx&&stream)return;
-  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+  stream=await navigator.mediaDevices.getUserMedia({
+    audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false
+  });
   audioCtx=new (window.AudioContext||window.webkitAudioContext)();
   if(audioCtx.state==='suspended')await audioCtx.resume();
   source=audioCtx.createMediaStreamSource(stream);
   processor=audioCtx.createScriptProcessor(2048,1,1);
-  source.connect(processor);
-  processor.connect(audioCtx.destination);
+  source.connect(processor);processor.connect(audioCtx.destination);
   processor.onaudioprocess=e=>{
     if(!listening||!spotter||processing)return;
     const chunk=new Float32Array(e.inputBuffer.getChannelData(0));
     const level=rms(chunk);
-    if(level>.018){speechSeen=true;silenceMs=0}
-    else if(speechSeen)silenceMs+=chunk.length/audioCtx.sampleRate*1000;
+    const chunkMs=chunk.length/audioCtx.sampleRate*1000;
+    if(level>.014){
+      speechSeen=true;silenceMs=0;lastLoudAt=performance.now();
+    }else if(speechSeen){
+      silenceMs+=chunkMs;
+    }
+
     processing=true;
     try{
       const hits=spotter.processAudio(chunk,audioCtx.sampleRate);
-      const now=performance.now();
-      for(const h of hits){
-        if(now-lastHitAt<120&&heard.at(-1)===h.label)continue;
-        heard.push(h.label);lastHitAt=now;speechSeen=true;silenceMs=0;
+      if(hits.length){
+        const n=Number(hits[0].label);
+        if(Number.isFinite(n)){
+          listening=false;
+          window.voiceHeardNumber(n,'聽到 '+n);
+          return;
+        }
       }
     }catch(err){console.error(err)}
     finally{processing=false}
-    if(speechSeen&&silenceMs>520)finishUtterance();
+
+    // Heard a voice but no complete number matched: reset after a short pause.
+    if(listening&&speechSeen&&silenceMs>850){
+      restartListening('沒聽清楚，請再說一次');
+    }
   };
 };
 window.beginVoiceAnswer=()=>{
   if(!spotter)return;
-  heard=[];speechSeen=false;silenceMs=0;lastHitAt=0;listening=true;
+  speechSeen=false;silenceMs=0;lastLoudAt=0;listening=true;
   try{spotter.reset()}catch(e){}
 };
-window.cancelVoiceAnswer=()=>{listening=false;heard=[];speechSeen=false;silenceMs=0};
-function finishUtterance(){
-  if(!listening)return;
-  listening=false;
-  const tokens=[...heard];
-  const n=parseNumberTokens(tokens);
-  if(Number.isFinite(n)){
-    window.voiceHeardNumber(n,tokens.join(''));
-  }else{
-    window.voiceRetry('沒聽清楚，再說一次');
-    setTimeout(()=>window.beginVoiceAnswer(),350);
-  }
-}
+window.cancelVoiceAnswer=()=>{
+  listening=false;speechSeen=false;silenceMs=0;lastLoudAt=0;
+};
 loadVoice();
 </script>
 </body>
