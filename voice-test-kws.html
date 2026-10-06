@@ -31,7 +31,7 @@ button:disabled{opacity:.45}
 <body>
 <main>
 <section class="card">
-  <h1>本機數字語音測試 <span style="font-size:12px;color:#6b7280">v2.0</span></h1>
+  <h1>本機數字語音測試 <span style="font-size:12px;color:#6b7280">v2.1</span></h1>
   <div class="sub">不使用 Web Speech、不使用 API。每一題只讓模型尋找「目前正確答案」整句，例如目標 12 時只找「十二」，不再同時找「十」。</div>
   <div class="row" style="margin-top:12px">
     <button class="primary" id="start" disabled>載入本機模型中…</button>
@@ -202,15 +202,22 @@ async function setupMic(){
     $('#meter').style.width=Math.min(100,level*450)+'%';
     if(!running||!caseArmed||processing)return;
     const ms=chunk.length/audioCtx.sampleRate*1000;
-    if(level>.012){speechSeen=true;silenceMs=0}
+    if(level>.008){speechSeen=true;silenceMs=0}
     else if(speechSeen)silenceMs+=ms;
 
     processing=true;
-    spotter.processAudio(chunk,audioCtx.sampleRate).then(hits=>{
+    try{
+      // core 版 KWS 是同步處理；上一版誤把它當 Promise，造成辨識流程直接中斷。
+      const hits=spotter.processAudio(chunk,audioCtx.sampleRate);
       if(hits.length && running && caseArmed){
         finish(true);
+        return;
       }
-    }).catch(e=>log('模型錯誤：'+String(e.message||e))).finally(()=>processing=false);
+    }catch(e){
+      log('模型錯誤：'+String(e.message||e));
+    }finally{
+      processing=false;
+    }
 
     // If real speech was present but the complete target phrase did not hit, mark fail after silence.
     if(running&&caseArmed&&speechSeen&&silenceMs>1200){
