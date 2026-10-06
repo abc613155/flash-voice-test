@@ -1,430 +1,83 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="format-detection" content="telephone=no">
-<title>一年級 901｜閃算訓練</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>中文數字語音訓練器</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.5.4/dist/speech-commands.min.js"></script>
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--text:#171717;--muted:#6b7280;--line:#d8dce3;--accent:#2563eb;--ok:#15803d;--bad:#b91c1c}
-*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif}
-.app{max-width:760px;margin:auto;padding:18px;padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right));padding-bottom:max(22px,env(safe-area-inset-bottom));touch-action:manipulation}.top{display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap}
-.sub{color:var(--muted);font-size:14px}.title{font-size:25px;font-weight:800;margin-top:3px}.stats{display:flex;gap:8px}
-.pill,.card{background:var(--card);border:1px solid var(--line);border-radius:13px}.pill{padding:9px 12px;font-size:14px}.card{padding:16px;margin-top:14px}
-.settings{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{font-size:14px;font-weight:700;display:block;margin-bottom:6px}
-select,input[type=number]{width:100%;min-height:46px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:8px 11px;font-size:16px}
-input[type=range]{width:100%}.speedrow{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
-.stage{min-height:300px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
-.status{align-self:stretch;display:flex;justify-content:space-between;color:var(--muted);font-size:14px;margin-bottom:18px}
-.flash{font-size:clamp(80px,20vw,150px);font-weight:900;line-height:1;min-height:155px;display:flex;align-items:center}
-.hint{color:var(--muted);font-size:14px;margin-top:20px}.actions{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:14px}
-button{min-height:52px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:10px 18px;font-size:17px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button:disabled{opacity:.45;cursor:not-allowed}
-.answer{display:none}.answer.show{display:block}.answergrid{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
-#answer{font-size:25px;font-weight:800}.feedback{min-height:25px;margin-top:10px;font-weight:700}.ok{color:var(--ok)}.bad{color:var(--bad)}
-.result{display:none;text-align:center}.result.show{display:block}.score{font-size:45px;font-weight:900}
-body.practice #settingsPanel{display:none}
-body.practice .app{padding-top:8px}
-body.practice .card.stage{margin-top:8px;min-height:220px}
-body.practice .answer.show{margin-top:8px}
-body.practice #practiceActions{margin-top:8px}
-@media(max-width:600px){
- .settings{grid-template-columns:1fr}
- .app{padding-top:12px}
- .top{align-items:flex-start}
- .title{font-size:21px}
- .stats{width:100%}.pill{flex:1;text-align:center}
- .card{padding:13px;margin-top:10px}
- .stage{min-height:230px;padding-top:8px;padding-bottom:8px}
- body.practice .stage{min-height:205px}
- body.practice .flash{min-height:118px}
- body.practice .status{margin-bottom:8px}
- body.practice .hint{margin-top:8px}
- body.practice .answer{padding:10px}
- body.practice #answer{min-height:48px}
- body.practice .actions button{min-height:46px}
- .flash{font-size:clamp(76px,28vw,128px);min-height:135px}
- .actions{display:grid;grid-template-columns:1fr 1fr;margin-top:10px}
- .actions #start{grid-column:1/-1}
- .actions button{width:100%}
- .answergrid{grid-template-columns:1fr}
- .answergrid button{width:100%}
- select,input[type=number],#answer{font-size:18px}
- input[type=range]{min-height:44px}
-}
-
-.modebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.headmain{min-width:0;flex:1}
-.topactions{display:flex;gap:6px;flex-wrap:wrap}
-.topactions button{min-height:38px;padding:6px 10px;font-size:14px;border-radius:9px}
-.answerinput{display:flex;gap:7px;align-items:center}
-.answerinput input{flex:1;min-width:0}
-.voiceState{white-space:nowrap;font-size:14px;font-weight:800;padding:9px 8px;border:1px solid var(--line);border-radius:10px;background:#fff}
-.voiceState.listening{animation:micpulse .8s infinite alternate}
-@keyframes micpulse{from{transform:scale(1)}to{transform:scale(1.08)}}
-@media(max-width:600px){
- .top{display:block}
- .modebar{display:block}
- .topactions{display:grid;grid-template-columns:1fr 1fr 1fr;margin-top:7px}
- .topactions button{width:100%;font-size:12px;padding:5px 3px;min-height:40px}
- .stats{margin-top:7px}
- body.practice .topactions{display:grid}
-}
-</style>
-</head>
-<body>
-<main class="app">
-  <header class="top">
-    <div class="headmain">
-      <div class="sub">一年級組 901｜閃算訓練</div>
-      <div class="modebar">
-        <div class="title" id="modeTitle">十級心算｜一位數 4 口</div>
-        <div class="topactions" id="practiceActions">
-          <button class="primary" id="start">▶ 開始閃算</button>
-          <button id="repeat" disabled>↻ 重播本題</button>
-          <button id="reset">重新設定</button>
-        </div>
-      </div>
-    </div>
-    <div class="stats"><div class="pill">第 <b id="qno">1</b>/<b id="qtotal">15</b> 題</div><div class="pill">正確 <b id="correct">0</b></div></div>
-  </header>
-
-  <section class="card settings" id="settingsPanel">
-    <div><label for="level">訓練級別</label><select id="level"><option value="10a" selected>十級｜一位數 4口</option>
-<option value="10b">十級｜一位／二位數 3口</option>
-<option value="9a">九級｜一位數 5口</option>
-<option value="9b">九級｜一位／二位數 4口</option></select></div>
-    <div><label for="speed">每口顯示時間：<b id="speedText">0.8 秒</b></label><input id="speed" type="range" min="0.1" max="1" step="0.1" value="0.8"><div class="speedrow"><span>0.1秒</span><span>快 ← → 慢</span><span>1.0秒</span></div></div>
-    <div><label for="questions">題數</label><select id="questions"><option value="15">15題｜正式訓練</option><option value="30">30題｜同分加賽</option><option value="10">10題｜快速練習</option></select></div>
-    <div><label for="gap">數字間隔</label><select id="gap"><option value="0">連續閃現（自動防黏字）</option><option value="100">間隔 0.1秒</option><option value="200">間隔 0.2秒</option></select></div>
-  </section>
-
-  <section class="card stage">
-    <div class="status"><span id="status">準備開始</span><span>第 <b id="mouth">0</b>/<b id="mouthTotal">4</b> 口</span></div>
-    <div class="flash" id="flashNumber">READY</div>
-    <div class="hint">按開始後，數字會逐口閃現；第一次使用會先載入約 42MB 中文語音模型</div>
-  </section>
-
-  <section class="card answer" id="answerPanel">
-    <div class="answergrid">
-      <div><label for="answer">答案</label><div class="answerinput"><input id="answer" inputmode="numeric" autocomplete="off" placeholder="輸入答案"><span id="mic" class="voiceState" aria-live="polite">🎙️待機</span></div></div>
-      <button class="primary" id="submit">確定</button>
-    </div>
-    <div class="feedback" id="feedback"></div>
-  </section>
-
-  
-
-  
-
-  <section class="card result" id="resultPanel">
-    <div class="sub">本次成績</div><div class="score"><span id="finalScore">0</span> / <span id="finalTotal">15</span></div><div id="accuracy"></div>
-  </section>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;color:#111827}
+main{max-width:650px;margin:auto;padding:18px}.card{background:#fff;border:1px solid #dde2ea;border-radius:18px;padding:18px;margin:12px 0}
+h1{font-size:25px;margin:0 0 8px}.muted{color:#667085;line-height:1.6}.word{text-align:center;font-size:76px;font-weight:900;margin:20px 0}
+button{width:100%;min-height:54px;border:0;border-radius:13px;font-size:18px;font-weight:800;margin-top:10px;background:#2563eb;color:#fff}
+button.secondary{background:#475467}button:disabled{opacity:.45}.status{text-align:center;font-weight:800;margin:10px}.progress{height:12px;background:#e5e7eb;border-radius:9px;overflow:hidden}.bar{height:100%;width:0;background:#2563eb}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.small{font-size:13px}
+</style></head><body><main>
+<h1>中文數字語音訓練器</h1>
+<div class="muted">只需做一次。每個基本詞錄 8 次，每次按住按鈕後清楚說出畫面上的字。</div>
+<div class="card">
+ <div class="progress"><div id="bar" class="bar"></div></div>
+ <div id="count" class="status">準備中…</div>
+ <div id="word" class="word">—</div>
+ <button id="rec" disabled>🎙 按一下錄這個詞</button>
+ <div id="msg" class="status"></div>
+</div>
+<div class="card">
+ <div class="grid"><button id="train" disabled>開始訓練模型</button><button id="test" class="secondary" disabled>測試辨識</button></div>
+ <div id="trainMsg" class="status"></div>
+ <button id="save" disabled>下載訓練資料</button>
+</div>
+<div class="muted small">詞彙：零、一、二、三、四、五、六、七、八、九、十、百、負、背景。訓練資料會留在目前瀏覽器；「下載訓練資料」可另存備份。</div>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/vosk-browser@0.0.5/dist/vosk.js"></script>
 <script>
-(()=>{
+const WORDS=['零','一','二','三','四','五','六','七','八','九','十','百','負','背景'], EACH=8;
+let r, wi=0, rep=0, busy=false;
 const $=s=>document.querySelector(s);
-let terms=[],target=0,q=1,correct=0,busy=false,timers=[];
-function cfg(){
- const lv=$('#level').value;
- const map={
-  '10a':{name:'十級心算｜一位數 4 口',mouths:4,mixed:false},
-  '10b':{name:'十級心算｜一位／二位數 3 口',mouths:3,mixed:true},
-  '9a':{name:'九級心算｜一位數 5 口',mouths:5,mixed:false},
-  '9b':{name:'九級心算｜一位／二位數 4 口',mouths:4,mixed:true}
- };
- return{lv,...map[lv],total:+$('#questions').value,speed:Math.round(+$('#speed').value*1000),gap:+$('#gap').value}
-}
-function clearTimers(){timers.forEach(clearTimeout);timers=[];busy=false}
-function later(fn,ms){timers.push(setTimeout(fn,ms))}
-function generate(){
- const c=cfg(); let a=[],sum=0;
- for(let i=0;i<c.mouths;i++){
-   let max=c.mixed ? 99 : 9;
-   let min=c.mixed && Math.random()<0.65 ? 10 : 1;
-   let n=min+Math.floor(Math.random()*(max-min+1));
-   if(i>0 && Math.random()<.32 && sum-n>=0)n=-n;
-   sum+=n;a.push(n);
- }
- terms=a;target=sum;$('#mouthTotal').textContent=c.mouths;
-}
-function header(){const c=cfg();$('#modeTitle').textContent=c.name;$('#qno').textContent=q;$('#qtotal').textContent=c.total;$('#correct').textContent=correct}
-
-let audioCtx=null;
-function audio(){
+async function init(){
  try{
-  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-  if(audioCtx.state==='suspended') audioCtx.resume();
-  return audioCtx;
- }catch(e){return null}
+  $('#msg').textContent='載入輕量語音底模…';
+  const base=speechCommands.create('BROWSER_FFT');
+  await base.ensureModelLoaded();
+  r=base.createTransfer('zh-num-'+Date.now());
+ }catch(err){$('#msg').textContent='載入失敗：'+err.message;return}
+ $('#rec').disabled=false; render();
 }
-function tone(freq,start,duration,type='sine',gain=.10){
- const a=audio(); if(!a)return;
- const o=a.createOscillator(),g=a.createGain(),t=a.currentTime;
- o.type=type;o.frequency.setValueAtTime(freq,t+start);
- g.gain.setValueAtTime(.0001,t+start);
- g.gain.exponentialRampToValueAtTime(gain,t+start+.012);
- g.gain.exponentialRampToValueAtTime(.0001,t+start+duration);
- o.connect(g);g.connect(a.destination);o.start(t+start);o.stop(t+start+duration+.03);
+function render(){
+ $('#word').textContent=WORDS[wi]||'完成';
+ $('#count').textContent=wi<WORDS.length?`${WORDS[wi]}：第 ${rep+1} / ${EACH} 次`:'錄音完成，可以訓練';
+ const done=wi*EACH+rep, total=WORDS.length*EACH;
+ $('#bar').style.width=(done/total*100)+'%';
+ if(wi>=WORDS.length){$('#rec').disabled=true;$('#train').disabled=false}
 }
-function soundCorrect(){
- tone(523.25,0,.12,'sine',.10);tone(659.25,.085,.13,'sine',.105);
- tone(783.99,.17,.19,'sine',.11);tone(1046.5,.27,.24,'sine',.075);
-}
-function soundWrong(){
- tone(392,0,.14,'triangle',.075);tone(311.13,.12,.18,'triangle',.07);
- tone(246.94,.27,.22,'triangle',.065);
-}
-
-
-
-
-
-let voskModel=null, recognizer=null, mediaStream=null, voiceAudioCtx=null;
-let recognizerNode=null, micSource=null, voiceReady=false, voiceLoading=false, answerOpen=false;
-let lastPartial='', partialStableTimer=null;
-
-function setMic(text, listening=false){
- const s=$('#mic'); s.textContent=text; s.classList.toggle('listening',listening);
-}
-
-function parseSpokenNumber(raw){
- let x=(raw||'').trim()
-   .replace(/[，。,.！!？?、\s]/g,'')
-   .replace(/^(答案是|答案為|答案|等於|是)/,'');
- let neg=/^(負|负|minus)/i.test(x);
- x=x.replace(/^(負|负|minus)/i,'');
- if(/^\d+$/.test(x)) return (neg?'-':'')+String(parseInt(x,10));
- const d={'零':0,'〇':0,'一':1,'二':2,'兩':2,'两':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
- let n=0, seen=false;
- if(x.includes('百')){
-   let [a,rest]=x.split('百');
-   if(a && d[a]===undefined)return '';
-   n+=(a?d[a]:1)*100; x=rest||''; seen=true;
- }
- if(x.includes('十')){
-   let [a,b]=x.split('十');
-   if(a && d[a]===undefined)return '';
-   n+=(a?d[a]:1)*10;
-   if(b){if(d[b]===undefined)return '';n+=d[b]}
-   seen=true;
- }else if(x){
-   if(x.length===1 && d[x]!==undefined){n+=d[x];seen=true}
-   else{
-     let digits=[...x].map(c=>d[c]);
-     if(digits.some(v=>v===undefined))return '';
-     n=parseInt(digits.join(''),10);seen=true;
-   }
- }
- return seen ? (neg?'-':'')+String(n) : '';
-}
-
-function acceptVoiceText(text, isFinal=false){
- if(!answerOpen)return;
- const n=parseSpokenNumber(text);
- if(n==='')return;
- lastPartial=n;
- setMic('🎙️ 聽到 '+n+'…',true);
- clearTimeout(partialStableTimer);
- // 心算只需要數字；停頓約 0.65 秒就直接送出，不必等 Vosk 長句終點。
- partialStableTimer=setTimeout(()=>{
-   if(!answerOpen || lastPartial!==n)return;
-   answerOpen=false;
-   $('#answer').value=n;
-   setMic('✓ 聽到 '+n,false);
-   setTimeout(()=>$('#submit').click(),60);
- }, isFinal ? 80 : 650);
-}
-
-
-async function getModelBlobWithProgress(){
- const cacheName='flash901-vosk-cn-v1', url='model.tar.gz';
- const wrap=document.getElementById('modelProgressWrap');
- const bar=document.getElementById('modelProgressBar');
- const txt=document.getElementById('modelProgressText');
- wrap.style.display='block';
-
- if('caches' in window){
-   const cache=await caches.open(cacheName);
-   const hit=await cache.match(url);
-   if(hit){
-     txt.textContent='已找到本機模型快取，準備初始化…';
-     bar.style.width='100%';
-     return await hit.blob();
-   }
- }
- const r=await fetch(url,{cache:'force-cache'});
- if(!r.ok) throw new Error('模型下載失敗 HTTP '+r.status);
- const total=Number(r.headers.get('content-length'))||0;
- if(!r.body){
-   const b=await r.blob();
-   bar.style.width='100%'; txt.textContent='模型下載完成，準備初始化…';
-   return b;
- }
- const reader=r.body.getReader(), chunks=[]; let got=0;
- while(true){
-   const {done,value}=await reader.read(); if(done)break;
-   chunks.push(value); got+=value.byteLength;
-   if(total){
-     const pct=Math.min(100,Math.round(got/total*100));
-     bar.style.width=pct+'%';
-     txt.textContent=`下載中文模型 ${pct}%（${(got/1048576).toFixed(1)} / ${(total/1048576).toFixed(1)} MB）`;
-   }else txt.textContent=`下載中文模型 ${(got/1048576).toFixed(1)} MB`;
- }
- const blob=new Blob(chunks,{type:'application/gzip'});
- bar.style.width='100%'; txt.textContent='下載完成，正在初始化語音模型…';
- if('caches' in window){
-   try{
-     const cache=await caches.open(cacheName);
-     await cache.put(url,new Response(blob,{headers:{'Content-Type':'application/gzip'}}));
-   }catch(e){console.warn('模型快取失敗',e)}
- }
- return blob;
-}
-function zhNum(n){
- if(n===0)return '零';
- const d=['零','一','二','三','四','五','六','七','八','九'];
- let s='';
- if(n>=100){s+=d[Math.floor(n/100)]+'百';n%=100;if(n>0&&n<10)s+='零'}
- if(n>=10){const t=Math.floor(n/10);if(t>1||s)s+=d[t];s+='十';n%=10}
- if(n>0)s+=d[n];
- return s;
-}
-function numberGrammar(){
- const a=['[unk]'];
- for(let i=0;i<=500;i++){a.push(zhNum(i));a.push(String(i));}
- for(let i=1;i<=200;i++){a.push('負'+zhNum(i));a.push('-'+i);}
- return JSON.stringify([...new Set(a)]);
-}
-async function initVosk(){
- if(voiceReady)return true;
- if(voiceLoading){
-   while(voiceLoading) await new Promise(r=>setTimeout(r,120));
-   return voiceReady;
- }
- voiceLoading=true;
+$('#rec').onclick=async()=>{
+ if(busy||wi>=WORDS.length)return;busy=true;$('#rec').disabled=true;$('#msg').textContent='🎙 請說「'+WORDS[wi]+'」';
  try{
-   if(!window.Vosk) throw new Error('Vosk 程式庫載入失敗');
-   setMic('準備中文模型…');
-   $('#status').textContent='準備語音模型';
-   const modelBlob=await getModelBlobWithProgress();
-   const modelUrl=URL.createObjectURL(modelBlob);
-   setMic('初始化中文模型…');
-   $('#status').textContent='模型已下載，正在初始化 Vosk…';
-   voskModel=await Vosk.createModel(modelUrl);
-   URL.revokeObjectURL(modelUrl);
-   document.getElementById('modelProgressText').textContent='模型初始化完成';
-
-   setMic('要求麥克風…');
-   mediaStream=await navigator.mediaDevices.getUserMedia({
-     video:false,
-     audio:{echoCancellation:true,noiseSuppression:true,channelCount:1}
-   });
-
-   voiceAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
-   if(voiceAudioCtx.state==='suspended') await voiceAudioCtx.resume();
-
-   recognizer=new voskModel.KaldiRecognizer(voiceAudioCtx.sampleRate, numberGrammar());
-   recognizer.on("result",m=>acceptVoiceText(m.result.text,true));
-   recognizer.on("partialresult",m=>acceptVoiceText(m.result.partial,false));
-
-   recognizerNode=voiceAudioCtx.createScriptProcessor(4096,1,1);
-   recognizerNode.onaudioprocess=e=>{
-     try{ if(recognizer) recognizer.acceptWaveform(e.inputBuffer); }catch(err){console.error(err)}
-   };
-   micSource=voiceAudioCtx.createMediaStreamSource(mediaStream);
-   micSource.connect(recognizerNode);
-   recognizerNode.connect(voiceAudioCtx.destination);
-
-   voiceReady=true;
-   setMic('🎙️ 語音就緒');
-   return true;
- }catch(err){
-   console.error(err);
-   setMic('語音啟動失敗');
-   $('#feedback').className='feedback bad';
-   $('#feedback').textContent='語音錯誤：'+(err && err.message ? err.message : err);
-   return false;
- }finally{voiceLoading=false}
-}
-
-function openVoiceAnswer(){
- answerOpen=true; lastPartial=''; clearTimeout(partialStableTimer);
- setMic(voiceReady?'🔴 請直接說答案':'🎙️ 語音未就緒',voiceReady);
-}
-function closeVoiceAnswer(){
- answerOpen=false; lastPartial=''; clearTimeout(partialStableTimer);
- if(voiceReady)setMic('🎙️ 待機',false);
-}
-
-function flash(){
- if(busy)return;clearTimers();busy=true;
- $('#answerPanel').classList.remove('show');$('#feedback').textContent='';$('#repeat').disabled=true;$('#start').disabled=true;
- $('#flashNumber').textContent='3';$('#status').textContent='準備';$('#mouth').textContent='0';
- const c=cfg(); later(()=>$('#flashNumber').textContent='2',450);later(()=>$('#flashNumber').textContent='1',900);later(()=>$('#flashNumber').textContent='●',1350);
- let base=1800;
- const blankMs=Math.max(55,c.gap);
- let cursor=base;
- terms.forEach((n,i)=>{
-   // 每一口先清空，再顯示數字；即使 3 → 3，也一定會產生視覺切換。
-   later(()=>{$('#flashNumber').textContent='';},cursor);
-   cursor+=blankMs;
-   later(()=>{
-     $('#status').textContent='閃算中';
-     $('#mouth').textContent=i+1;
-     $('#flashNumber').textContent=(n<0?'−':'')+Math.abs(n);
-   },cursor);
-   cursor+=c.speed;
- });
- const end=cursor+80;
- later(()=>{$('#flashNumber').textContent='？';$('#status').textContent='請作答';$('#answerPanel').classList.add('show');openVoiceAnswer();$('#repeat').disabled=false;$('#start').disabled=false;busy=false;$('#answer').value='';$('#answer').focus()},end);
-}
-function next(){
- const c=cfg();if(q>=c.total){finish();return}
- q++;closeVoiceAnswer();document.body.classList.add('practice');generate();header();$('#answerPanel').classList.remove('show');$('#flashNumber').textContent='READY';$('#status').textContent='下一題準備';$('#mouth').textContent='0';later(flash,600);
-}
-function submit(){
- const el=$('#answer');if(el.value.trim()==='')return;
- if(Number(el.value)===target){
- correct++;$('#correct').textContent=correct;$('#feedback').className='feedback ok';$('#feedback').textContent='✓ 正確';soundCorrect();
- } else {
- $('#feedback').className='feedback bad';$('#feedback').textContent='✗ 答案：'+target+'　題目：'+terms.map((x,i)=>(x>0&&i>0?'+':'')+x).join(' ');soundWrong();
- }
- $('#submit').disabled=true;later(()=>{$('#submit').disabled=false;next()},1000);
-}
-function finish(){clearTimers();const c=cfg();$('#answerPanel').classList.remove('show');$('#resultPanel').classList.add('show');$('#flashNumber').textContent='完成';$('#status').textContent='訓練完成';$('#finalScore').textContent=correct;$('#finalTotal').textContent=c.total;$('#accuracy').textContent='正確率 '+Math.round(correct/c.total*100)+'%'}
-function reset(){
- closeVoiceAnswer();
- clearTimers();q=1;correct=0;generate();header();
- document.body.classList.remove('practice');
- $('#resultPanel').classList.remove('show');
- $('#answerPanel').classList.remove('show');
- $('#flashNumber').textContent='READY';
- $('#status').textContent='準備開始';
- $('#mouth').textContent='0';
- $('#repeat').disabled=true;$('#start').disabled=false;
- window.scrollTo(0,0);
-}
-$('#speed').addEventListener('input',()=>$('#speedText').textContent=(+$('#speed').value).toFixed(1)+' 秒');
-$('#level').addEventListener('change',reset);$('#questions').addEventListener('change',reset);
-async function startRun(){
- if(busy||voiceLoading)return;
- audio();
- $('#start').disabled=true;
- const ok=await initVosk();
- $('#start').disabled=false;
- if(!ok)return;
- document.body.classList.add('practice');
- generate();
- flash();
-}
-$('#start').addEventListener('click',startRun);$('#repeat').addEventListener('click',flash);$('#reset').addEventListener('click',reset);$('#submit').addEventListener('click',submit);
-$('#answer').addEventListener('keydown',e=>{if(e.key==='Enter')submit()});
-reset();
-})();
-</script>
-</body>
-</html>
+  await r.collectExample(WORDS[wi]);
+  rep++; if(rep>=EACH){rep=0;wi++}
+  $('#msg').textContent='✓ 收到'; render();
+ }catch(e){$('#msg').textContent='錄音錯誤：'+e.message}
+ busy=false;if(wi<WORDS.length)$('#rec').disabled=false;
+};
+$('#train').onclick=async()=>{
+ $('#train').disabled=true;$('#trainMsg').textContent='訓練中…';
+ try{
+  await r.train({epochs:35,callback:{onEpochEnd:async(e,logs)=>{$('#trainMsg').textContent=`訓練 ${e+1}/35｜accuracy ${(logs.acc*100||0).toFixed(0)}%`}}});
+  $('#trainMsg').textContent='✓ 模型訓練完成';$('#test').disabled=false;$('#save').disabled=false;
+ }catch(e){$('#trainMsg').textContent='訓練失敗：'+e.message;$('#train').disabled=false}
+};
+$('#test').onclick=async()=>{
+ $('#trainMsg').textContent='🎙 說一個已訓練的基本詞…';
+ await r.listen(res=>{
+  const labels=r.wordLabels();let k=0;for(let i=1;i<res.scores.length;i++)if(res.scores[i]>res.scores[k])k=i;
+  $('#trainMsg').textContent=`聽到：${labels[k]}｜信心 ${(res.scores[k]*100).toFixed(0)}%`;
+  r.stopListening();
+ },{probabilityThreshold:0.65,overlapFactor:0.25,invokeCallbackOnNoiseAndUnknown:false});
+};
+$('#save').onclick=async()=>{
+ try{await r.serializeExamples().then(buf=>{
+  const blob=new Blob([buf],{type:'application/octet-stream'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='中文數字訓練資料.bin';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+ });}catch(e){$('#trainMsg').textContent='下載失敗：'+e.message}
+};
+init();
+</script></body></html>
